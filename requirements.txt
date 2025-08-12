@@ -1,0 +1,11 @@
+# Core dependencies for PDF processing scripts
+pypdf>=6.0.0
+chromadb>=1.0.13
+sentence-transformers>=4.1.0
+
+# Supporting dependencies (usually installed automatically)
+typing-extensions>=4.13.1
+pathlib
+uuid
+argparse
+statistics

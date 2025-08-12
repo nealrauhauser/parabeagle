@@ -19,11 +19,7 @@ from chromadb.api.collection_configuration import (
 from chromadb.api import EmbeddingFunction
 from chromadb.utils.embedding_functions import (
     DefaultEmbeddingFunction,
-    CohereEmbeddingFunction,
-    OpenAIEmbeddingFunction,
-    JinaEmbeddingFunction,
-    VoyageAIEmbeddingFunction,
-    RoboflowEmbeddingFunction,
+    SentenceTransformerEmbeddingFunction,
 )
 
 # Initialize FastMCP server
@@ -168,25 +164,33 @@ async def chroma_list_collections(
     except Exception as e:
         raise Exception(f"Failed to list collections: {str(e)}") from e
 
-mcp_known_embedding_functions: Dict[str, EmbeddingFunction] = {
-    "default": DefaultEmbeddingFunction,
-    "cohere": CohereEmbeddingFunction,
-    "openai": OpenAIEmbeddingFunction,
-    "jina": JinaEmbeddingFunction,
-    "voyageai": VoyageAIEmbeddingFunction,
-    "roboflow": RoboflowEmbeddingFunction,
-}
+def create_local_embedding_functions():
+    """Create embedding functions for local models only."""
+    return {
+        "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
+        "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
+            model_name="sentence-transformers/all-mpnet-base-v2"
+        ),
+        "bert-768": lambda: SentenceTransformerEmbeddingFunction(
+            model_name="sentence-transformers/all-distilroberta-v1"
+        ),
+        "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        ),
+    }
+
+mcp_known_embedding_functions = create_local_embedding_functions()
 @mcp.tool()
 async def chroma_create_collection(
     collection_name: str,
     embedding_function_name: str = "default",
     metadata: Dict | None = None,
 ) -> str:
-    """Create a new Chroma collection with configurable HNSW parameters.
+    """Create a new Chroma collection with configurable embedding functions.
     
     Args:
         collection_name: Name of the collection to create
-        embedding_function_name: Name of the embedding function to use. Options: 'default', 'cohere', 'openai', 'jina', 'voyageai', 'ollama', 'roboflow'
+        embedding_function_name: Name of the embedding function to use. Options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
         metadata: Optional metadata dict to add to the collection
     """
     client = get_chroma_client()
