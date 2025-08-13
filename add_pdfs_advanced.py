@@ -794,7 +794,7 @@ Examples:
     print(f"Chunking strategy: {chunking_mode}")
     
     if args.experimental:
-        print("⚠️  WARNING: Using experimental chunking with untested theories!")
+        print("WARNING: Using experimental chunking with untested theories!")
         print("   Features: section headers, lists, captions, semantic scoring, dynamic balancing")
     
     data_dir = args.data_dir

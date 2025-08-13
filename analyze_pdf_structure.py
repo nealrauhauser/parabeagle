@@ -11,8 +11,8 @@ def check_dependencies():
         missing_deps.append("pypdf")
     
     if missing_deps:
-        print("❌ Missing required dependencies:", ", ".join(missing_deps))
-        print("\n🔧 To fix this:")
+        print("issing required dependencies:", ", ".join(missing_deps))
+        print("\no fix this:")
         
         # Check if we're in a venv
         import sys
@@ -459,14 +459,14 @@ def print_analysis_report(pdf_path, analysis, show_examples=False):
     para_stats = analysis.get("paragraph_analysis", {}).get("statistics", {})
     sent_stats = analysis.get("sentence_analysis", {}).get("statistics", {})
     
-    print(f"\n📄 DOCUMENT OVERVIEW")
+    print(f"\nDOCUMENT OVERVIEW")
     print(f"   Total characters: {para_stats.get('total_characters', 0):,}")
     print(f"   Total paragraphs: {para_stats.get('count', 0):,}")
     print(f"   Total sentences:  {sent_stats.get('count', 0):,}")
     
     # Paragraph analysis
     if para_stats:
-        print(f"\n📝 PARAGRAPH ANALYSIS")
+        print(f"\nPARAGRAPH ANALYSIS")
         print(f"   Average length:   {para_stats['mean_length']:.0f} characters")
         print(f"   Median length:    {para_stats['median_length']:.0f} characters")
         print(f"   Standard dev:     {para_stats['std_dev']:.0f} characters")
@@ -478,7 +478,7 @@ def print_analysis_report(pdf_path, analysis, show_examples=False):
     
     # Sentence analysis
     if sent_stats:
-        print(f"\n💬 SENTENCE ANALYSIS")
+        print(f"\nSENTENCE ANALYSIS")
         print(f"   Average length:   {sent_stats['mean_length']:.0f} characters")
         print(f"   Median length:    {sent_stats['median_length']:.0f} characters")
         print(f"   Standard dev:     {sent_stats['std_dev']:.0f} characters")
@@ -488,14 +488,14 @@ def print_analysis_report(pdf_path, analysis, show_examples=False):
     # Document structure
     sections = analysis.get("document_sections", {})
     if sections:
-        print(f"\n🏗️  DOCUMENT STRUCTURE")
+        print(f"\n  DOCUMENT STRUCTURE")
         print(f"   Headers detected:    {len(sections.get('headers', []))}")
         print(f"   List items:          {len(sections.get('lists', []))}")
         print(f"   References:          {len(sections.get('references', []))}")
         print(f"   Captions:            {len(sections.get('captions', []))}")
     
     # Chunking recommendations
-    print(f"\n🎯 CHUNKING RECOMMENDATIONS")
+    print(f"\nCHUNKING RECOMMENDATIONS")
     if para_stats:
         avg_para = para_stats['mean_length']
         p75_para = para_stats['percentile_75']
@@ -520,7 +520,7 @@ def print_analysis_report(pdf_path, analysis, show_examples=False):
     if show_examples:
         paragraphs = analysis.get("paragraph_analysis", {}).get("paragraphs", [])
         if paragraphs:
-            print(f"\n📋 PARAGRAPH EXAMPLES")
+            print(f"\nARAGRAPH EXAMPLES")
             
             # Show shortest paragraph
             shortest_para = min(paragraphs, key=len)
@@ -549,7 +549,7 @@ def analyze_multiple_pdfs(pdf_paths, show_examples=False):
         
         text = extract_text_from_pdf(pdf_path)
         if not text:
-            print(f"  ⚠️  Could not extract text from {pdf_path}")
+            print(f"  Could not extract text from {pdf_path}")
             continue
         
         analysis = {
@@ -582,7 +582,7 @@ def analyze_multiple_pdfs(pdf_paths, show_examples=False):
             median_para = statistics.median(all_para_lengths)
             std_para = statistics.stdev(all_para_lengths) if len(all_para_lengths) > 1 else 0
             
-            print(f"\n📊 COMBINED PARAGRAPH STATISTICS")
+            print(f"\nCOMBINED PARAGRAPH STATISTICS")
             print(f"   Total paragraphs: {len(all_para_lengths):,}")
             print(f"   Average length:   {avg_para:.0f} characters")
             print(f"   Median length:    {median_para:.0f} characters")
@@ -591,7 +591,7 @@ def analyze_multiple_pdfs(pdf_paths, show_examples=False):
             print(f"   Max length:       {max(all_para_lengths)} characters")
             
             # Overall chunking recommendation
-            print(f"\n🎯 OVERALL CHUNKING RECOMMENDATION")
+            print(f"\nOVERALL CHUNKING RECOMMENDATION")
             recommended = max(2000, avg_para * 3)
             print(f"   For this document set: {recommended:.0f} characters")
             print(f"   Conservative approach: {median_para * 4:.0f} characters")

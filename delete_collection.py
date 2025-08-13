@@ -23,7 +23,7 @@ def delete_collection(data_dir, collection_name, confirm=False):
         
         # Confirmation prompt
         if not confirm:
-            print(f"\n⚠️  WARNING: This will permanently delete collection '{collection_name}' and all its documents!")
+            print(f"\nWARNING: This will permanently delete collection '{collection_name}' and all its documents!")
             response = input("Type 'yes' to confirm deletion: ").strip().lower()
             if response != 'yes':
                 print("Deletion cancelled.")
@@ -31,7 +31,7 @@ def delete_collection(data_dir, collection_name, confirm=False):
         
         # Delete the collection
         client.delete_collection(collection_name)
-        print(f"✅ Collection '{collection_name}' has been deleted successfully.")
+        print(f"Collection '{collection_name}' has been deleted successfully.")
         return 0
         
     except Exception as e:
@@ -118,7 +118,7 @@ Examples:
         sys.exit(1)
     
     if args.force:
-        print("⚠️  FORCE MODE: Deleting without confirmation!")
+        print("FORCE MODE: Deleting without confirmation!")
     
     exit_code = delete_collection(args.data_dir, args.collection_name, confirm=args.force)
     sys.exit(exit_code)
