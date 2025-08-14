@@ -144,7 +144,7 @@ def split_by_sentences(text):
     sentences = re.split(r'(?<=[.!?])\s+', text)
     return [s.strip() for s in sentences if s.strip()]
 
-def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, embedding_function_name="default"):
+def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, embedding_function_name="default", show_chunks=False):
     """Add PDF documents to a Chroma collection using semantic chunking."""
     try:
         client = chromadb.PersistentClient(path=data_dir)
@@ -216,6 +216,13 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
             
             pdf_name = Path(pdf_path).stem
             for i, chunk in enumerate(chunks):
+                if show_chunks:
+                    print(f"{'='*60}")
+                    print(f"CHUNK {i+1}/{len(chunks)} from {Path(pdf_path).name}")
+                    print(f"{'='*60}")
+                    print(chunk)
+                    print()
+                
                 documents.append(chunk)
                 metadatas.append({
                     "source": pdf_path,
@@ -291,6 +298,8 @@ Examples:
                        choices=["default", "mpnet-768", "bert-768", "minilm-384"],
                        default="default",
                        help="Embedding function to use: default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
+    parser.add_argument("--show-chunks", action="store_true",
+                       help="Print each chunk as it's processed with separator lines")
     
     args = parser.parse_args()
     
@@ -344,6 +353,7 @@ Examples:
         pdf_paths, 
         max_chunk_size=args.max_chunk_size,
         min_chunk_size=args.min_chunk_size,
-        embedding_function_name=args.embedding_function
+        embedding_function_name=args.embedding_function,
+        show_chunks=args.show_chunks
     )
     sys.exit(exit_code)

@@ -96,10 +96,12 @@ def get_chroma_client(args=None):
                     settings=settings
                 )
             except ssl.SSLError as e:
-                print(f"SSL connection failed: {str(e)}")
+                import sys
+                print(f"SSL connection failed: {str(e)}", file=sys.stderr)
                 raise
             except Exception as e:
-                print(f"Error connecting to HTTP client: {str(e)}")
+                import sys
+                print(f"Error connecting to HTTP client: {str(e)}", file=sys.stderr)
                 raise
             
         elif args.client_type == 'cloud':
@@ -121,10 +123,12 @@ def get_chroma_client(args=None):
                     }
                 )
             except ssl.SSLError as e:
-                print(f"SSL connection failed: {str(e)}")
+                import sys
+                print(f"SSL connection failed: {str(e)}", file=sys.stderr)
                 raise
             except Exception as e:
-                print(f"Error connecting to cloud client: {str(e)}")
+                import sys
+                print(f"Error connecting to cloud client: {str(e)}", file=sys.stderr)
                 raise
                 
         elif args.client_type == 'persistent':
@@ -445,6 +449,83 @@ async def chroma_query_documents(
         raise Exception(f"Failed to query documents from collection '{collection_name}': {str(e)}") from e
 
 @mcp.tool()
+async def chroma_query_with_sources(
+    collection_name: str,
+    query_texts: List[str],
+    n_results: int = 5,
+    where: Dict | None = None,
+    where_document: Dict | None = None
+) -> str:
+    """Query documents and return results formatted with source citations and bibliography.
+    
+    Args:
+        collection_name: Name of the collection to query
+        query_texts: List of query texts to search for
+        n_results: Number of results to return per query
+        where: Optional metadata filters
+        where_document: Optional document content filters
+        
+    Returns:
+        Formatted string with results and bibliography of source files
+    """
+    if not query_texts:
+        raise ValueError("The 'query_texts' list cannot be empty.")
+
+    client = get_chroma_client()
+    try:
+        collection = client.get_collection(collection_name)
+        results = collection.query(
+            query_texts=query_texts,
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=["documents", "metadatas", "distances"]
+        )
+        
+        if not results or not results.get('documents'):
+            return "No results found."
+        
+        output_lines = []
+        sources_used = set()
+        
+        for query_idx, query_text in enumerate(query_texts):
+            if len(query_texts) > 1:
+                output_lines.append(f"Query: {query_text}")
+                output_lines.append("")
+            
+            docs = results['documents'][query_idx]
+            metas = results['metadatas'][query_idx]
+            dists = results['distances'][query_idx]
+            
+            for i, (doc, meta, dist) in enumerate(zip(docs, metas, dists)):
+                similarity = 1 - dist
+                
+                # Extract source info from metadata
+                source_file = meta.get('filename', 'Unknown') if meta else 'Unknown'
+                chunk_idx = meta.get('chunk_index', 0) if meta else 0
+                source_path = meta.get('source', '') if meta else ''
+                
+                # Just show the document content without source info in each result
+                doc_text = doc if len(doc) <= 400 else doc[:400] + "..."
+                output_lines.append(doc_text)
+                output_lines.append("")
+                
+                # Collect sources
+                if source_file != 'Unknown':
+                    sources_used.add(source_file)
+        
+        # Add simple bibliography at the end
+        if sources_used:
+            output_lines.append("Sources:")
+            for filename in sorted(sources_used):
+                output_lines.append(filename)
+        
+        return "\n".join(output_lines)
+        
+    except Exception as e:
+        raise Exception(f"Failed to query documents from collection '{collection_name}': {str(e)}") from e
+
+@mcp.tool()
 async def chroma_get_documents(
     collection_name: str,
     ids: List[str] | None = None,
@@ -662,13 +743,14 @@ def main():
     # Initialize client with parsed args
     try:
         get_chroma_client(args)
-        print("Successfully initialized Chroma client")
+        pass  # Successfully initialized Chroma client
     except Exception as e:
-        print(f"Failed to initialize Chroma client: {str(e)}")
+        import sys
+        print(f"Failed to initialize Chroma client: {str(e)}", file=sys.stderr)
         raise
     
     # Initialize and run the server
-    print("Starting MCP server")
+    # Starting MCP server
     mcp.run(transport='stdio')
     
 if __name__ == "__main__":
