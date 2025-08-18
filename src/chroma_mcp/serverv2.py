@@ -10,6 +10,7 @@ import ssl
 import uuid
 import time
 import json
+import sqlite3
 from typing_extensions import TypedDict
 
 
@@ -27,6 +28,8 @@ mcp = FastMCP("chroma")
 
 # Global variables
 _chroma_client = None
+_active_directory = None
+_directory_db_path = None
 
 def create_parser():
     """Create and return the argument parser."""
@@ -64,6 +67,172 @@ def create_parser():
                        help='Path to .env file', 
                        default=os.getenv('CHROMA_DOTENV_PATH', '.chroma_env'))
     return parser
+
+def init_directory_db(db_path: str):
+    """Initialize the directory management database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Create directories table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS directories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            path TEXT NOT NULL,
+            is_active INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+def get_directory_db_path(base_dir: str) -> str:
+    """Get the path to the directory management database."""
+    return os.path.join(base_dir, 'chroma_directories.sqlite3')
+
+def list_directories() -> List[Dict]:
+    """List all configured directories."""
+    if not _directory_db_path or not os.path.exists(_directory_db_path):
+        return []
+    
+    conn = sqlite3.connect(_directory_db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT name, path, is_active, created_at 
+        FROM directories 
+        ORDER BY name
+    ''')
+    
+    directories = []
+    for row in cursor.fetchall():
+        directories.append({
+            'name': row[0],
+            'path': row[1],
+            'is_active': bool(row[2]),
+            'created_at': row[3]
+        })
+    
+    conn.close()
+    return directories
+
+def add_directory(name: str, path: str) -> bool:
+    """Add a new directory configuration."""
+    if not _directory_db_path:
+        return False
+    
+    # Validate path exists
+    if not os.path.exists(path):
+        raise ValueError(f"Directory does not exist: {path}")
+    
+    if not os.path.isdir(path):
+        raise ValueError(f"Path is not a directory: {path}")
+    
+    conn = sqlite3.connect(_directory_db_path)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO directories (name, path) 
+            VALUES (?, ?)
+        ''', (name, os.path.abspath(path)))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        raise ValueError(f"Directory name '{name}' already exists")
+    finally:
+        conn.close()
+
+def remove_directory(name: str) -> bool:
+    """Remove a directory configuration."""
+    if not _directory_db_path:
+        return False
+    
+    conn = sqlite3.connect(_directory_db_path)
+    cursor = conn.cursor()
+    
+    # Check if it's the active directory
+    cursor.execute('SELECT is_active FROM directories WHERE name = ?', (name,))
+    result = cursor.fetchone()
+    
+    if not result:
+        conn.close()
+        raise ValueError(f"Directory '{name}' not found")
+    
+    if result[0]:  # is_active
+        conn.close()
+        raise ValueError(f"Cannot remove active directory '{name}'. Set another directory as active first.")
+    
+    cursor.execute('DELETE FROM directories WHERE name = ?', (name,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    
+    return deleted
+
+def set_active_directory(name: str) -> str:
+    """Set the active directory and return its path."""
+    global _active_directory, _chroma_client
+    
+    if not _directory_db_path:
+        raise ValueError("Directory database not initialized")
+    
+    conn = sqlite3.connect(_directory_db_path)
+    cursor = conn.cursor()
+    
+    # Check if directory exists
+    cursor.execute('SELECT path FROM directories WHERE name = ?', (name,))
+    result = cursor.fetchone()
+    
+    if not result:
+        conn.close()
+        raise ValueError(f"Directory '{name}' not found")
+    
+    directory_path = result[0]
+    
+    # Verify directory still exists on filesystem
+    if not os.path.exists(directory_path):
+        conn.close()
+        raise ValueError(f"Directory path no longer exists: {directory_path}")
+    
+    # Clear all active flags
+    cursor.execute('UPDATE directories SET is_active = 0')
+    
+    # Set new active directory
+    cursor.execute('UPDATE directories SET is_active = 1 WHERE name = ?', (name,))
+    
+    conn.commit()
+    conn.close()
+    
+    # Reset the chroma client to use new directory
+    _chroma_client = None
+    _active_directory = directory_path
+    
+    return directory_path
+
+def get_active_directory() -> str:
+    """Get the currently active directory path."""
+    global _active_directory
+    
+    if _active_directory:
+        return _active_directory
+    
+    if not _directory_db_path or not os.path.exists(_directory_db_path):
+        return None
+    
+    conn = sqlite3.connect(_directory_db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT path FROM directories WHERE is_active = 1')
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        _active_directory = result[0]
+        return _active_directory
+    
+    return None
 
 def get_chroma_client(args=None):
     """Get or create the global Chroma client instance."""
@@ -132,9 +301,13 @@ def get_chroma_client(args=None):
                 raise
                 
         elif args.client_type == 'persistent':
-            if not args.data_dir:
+            # Use active directory if available, otherwise fall back to args.data_dir
+            active_dir = get_active_directory()
+            data_dir = active_dir if active_dir else args.data_dir
+            
+            if not data_dir:
                 raise ValueError("Data directory must be provided via --data-dir flag when using persistent client")
-            _chroma_client = chromadb.PersistentClient(path=args.data_dir)
+            _chroma_client = chromadb.PersistentClient(path=data_dir)
         else:  # ephemeral
             _chroma_client = chromadb.EphemeralClient()
             
@@ -337,8 +510,107 @@ async def chroma_delete_collection(collection_name: str) -> str:
     except Exception as e:
         raise Exception(f"Failed to delete collection '{collection_name}': {str(e)}") from e
 
-##### Document Tools #####
+##### Directory Management Tools #####
+
 @mcp.tool()
+async def chroma_list_directories() -> str:
+    """List all configured Chroma directories.
+    
+    Returns:
+        Formatted string showing directory name, path, and active status
+    """
+    try:
+        directories = list_directories()
+        
+        if not directories:
+            return "No directories configured"
+        
+        lines = ["Configured directories:"]
+        for dir_info in directories:
+            status = " (ACTIVE)" if dir_info['is_active'] else ""
+            lines.append(f"  {dir_info['name']}: {dir_info['path']}{status}")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        raise Exception(f"Failed to list directories: {str(e)}") from e
+
+@mcp.tool()
+async def chroma_add_directory(name: str, path: str) -> str:
+    """Add a new Chroma directory configuration.
+    
+    Args:
+        name: Symbolic name for the directory
+        path: Filesystem path to the directory
+    
+    Returns:
+        Success message
+    """
+    try:
+        add_directory(name, path)
+        return f"Successfully added directory '{name}' -> {path}"
+        
+    except Exception as e:
+        raise Exception(f"Failed to add directory: {str(e)}") from e
+
+@mcp.tool()
+async def chroma_remove_directory(name: str) -> str:
+    """Remove a Chroma directory configuration.
+    
+    Args:
+        name: Symbolic name of the directory to remove
+    
+    Returns:
+        Success message
+    """
+    try:
+        if remove_directory(name):
+            return f"Successfully removed directory '{name}'"
+        else:
+            return f"Directory '{name}' not found"
+            
+    except Exception as e:
+        raise Exception(f"Failed to remove directory: {str(e)}") from e
+
+@mcp.tool()
+async def chroma_set_active_directory(name: str) -> str:
+    """Set the active Chroma directory.
+    
+    Args:
+        name: Symbolic name of the directory to make active
+    
+    Returns:
+        Success message with new active directory path
+    """
+    try:
+        directory_path = set_active_directory(name)
+        return f"Successfully set active directory to '{name}' -> {directory_path}"
+        
+    except Exception as e:
+        raise Exception(f"Failed to set active directory: {str(e)}") from e
+
+@mcp.tool()
+async def chroma_get_active_directory() -> str:
+    """Get the currently active Chroma directory.
+    
+    Returns:
+        Current active directory information
+    """
+    try:
+        directories = list_directories()
+        active_dirs = [d for d in directories if d['is_active']]
+        
+        if not active_dirs:
+            return "No active directory set"
+        
+        active_dir = active_dirs[0]
+        return f"Active directory: {active_dir['name']} -> {active_dir['path']}"
+        
+    except Exception as e:
+        raise Exception(f"Failed to get active directory: {str(e)}") from e
+
+##### Document Tools #####
+# @mcp.tool()  # DISABLED - Function kept for reference
 async def chroma_add_documents(
     collection_name: str,
     documents: List[str],
@@ -718,6 +990,8 @@ def validate_thought_data(input_data: Dict) -> Dict:
 
 def main():
     """Entry point for the Chroma MCP server."""
+    global _directory_db_path
+    
     parser = create_parser()
     args = parser.parse_args()
     
@@ -726,6 +1000,17 @@ def main():
         # re-parse args to read the updated environment variables
         parser = create_parser()
         args = parser.parse_args()
+    
+    # Initialize directory management database if using persistent client
+    if args.client_type == 'persistent' and args.data_dir:
+        _directory_db_path = get_directory_db_path(args.data_dir)
+        init_directory_db(_directory_db_path)
+        
+        # If no directories configured, add the base directory as default
+        directories = list_directories()
+        if not directories:
+            add_directory("default", args.data_dir)
+            set_active_directory("default")
     
     # Validate required arguments based on client type
     if args.client_type == 'http':

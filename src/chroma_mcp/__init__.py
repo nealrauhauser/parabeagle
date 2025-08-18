@@ -1,5 +1,5 @@
 # This file can be empty 
 
-from .server import main
+from .serverv2 import main
 
 __all__ = ["main"]

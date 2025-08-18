@@ -1,28 +1,27 @@
 This repo is a fork of [Chroma's Official MCP Server](https://github.com/chroma-core/chroma-mcp/)
 
-There were a number of specific things I wanted that were not in the base.
+This software offers the following features:
 
-1. My systems are M1 Macs and can handle more than the basic 384 dimension embedding.
-2. Chunking needed to be made paragraph aware for some work I do.
-3. Chunking needed to handle court documents in a sensible fashion.
-4. A fast, deterministic means of adding documents was a must, no LLM convulsions.
-5. I need to produce multiple pre-embedded sets of documents for distribution to others.
+1. Semantic chunking based on paragraphs, with provisions for court documents.
+2. Multiple mutually exclusive data directories, suitable for court case work.
+3. User configurable 384 or 768 dimension embedding; go fast, or be really accurate.
+4. Command line document tools suitable for batch loading.
+5. An MCP search function that returns a bibliography of documents and their file paths.
 
-Chroma's system supports a variety of storage methods, this software is only tested on local storage.
+An LLM is basically a stochastic parrot, and they will "hallucinate", which is a polite industry term to describe the fabrication of "facts" on the fly in order to make pleasing sentences and paragraphs. This sort of cognitive defect is simply unacceptable for intelligence or litigation work. This MCP server offers a function called chroma_query_with_sources, which permits the user to verify the LLM's statements by inspecting source documents. 
 
-The assumed mode of use with this software is Claude Desktop or some other MCP host querying the system, but loading documents is done in batches via the command line. The internals of the server support higher dimensional embedding and its begun to sprout new features.
 
-There is a script that evaluates documents so you can set optimum chunk size. Run the script, look at the maximum paragraph size, and it's probably still a sensible number under 3,000 characters. I used to have a website called Disinfodrome that provided search services across hundreds of thousands of documents, so I need to see all the tuning knobs for the sake of large batches.
+Chroma's default chunking is to split documents into 1,000 character blocks. This software's command line loader looks for paragraphs in literature and it has some features meant to handle court documents. The default maximum chunk size is 3,000 characters. A very dense 8.5x11" page is just under 2,000 characters, so unless you're working on an Ayn Rand novel, your paragraphs will be kept whole for the sake of semantic search.
 
-The MCP server's internal chunking remains the simplistic 1k character blocks. The command line loader is smart about paragraphs in literature and it tries to do the right things with court documents. There is no compatibility issue here, the details of how chunking was done don't matter for retrieval. There is a separate script for some advanced notions on chunking, but it's starting to feel unnecessarily complex.
+This software assumes you're going to run local embedding rather than using a paid API. You have a choice of embeddings - minilm-384 (fast), mpnet-768(accurate), bert-768 (tries to balance). Each collection can have its own embedding, documents in a collection must be the same. 
 
-The scripts look for the storage path in $CHROMADIR and this can be overridden with the command line --data-dir option. I both use Chroma in production, as well as for creating bundles of pre-embedded documents for others to use.
+Note that this only apply to the CLI addpdf.py loader. The chroma_add_documents function in the server code is still just the 1k chunk 384 dimension default, so this has been DISABLED. If you were to use it to load a document over the top of a batch created collection, terrible things would happen.
+
+The pdfstruct.py script evaluates a document in terms of paragraph size distribution. If you have enormous datasets there might be some advantage in tweaking the maximum chunk size.
 
 To Do:
 
-There needs to be a method to create a tarball from one or more given collections and their metadata from Chroma's Sqlite3 database. There is a companion need to be able to import such a thing into an existing system.
+Right now the only way to move data between systems is to archive an entire data directory and share it. There really needs to be a function that exports a collection from a directory, and a companion function that will merge such an export into a different directory. If your paralegal evaluates a huge collection of documents and adds a hundred to a collection, it will be necessary to be able to export that work and transfer it to the system the attorney(s) on the case are using.
 
-There is also a need for the system to support more than one folder, which will contain one or more collections of documents. One use case here is court work - if I have two similar cases I certainly don't want them merged. The folder switching should be available within the MCP server, rather than the current method which requires shutting down the MCP client and modifying an environment variable.
 
-Chroma's original deletion function depends on knowing the document you want to remove. If you've turned a sixty page court filing into many paragraphs (documents) that's an impossible mess. When handling evidence or intel, it's not uncommon to decide to back out something you've received. There is now a script to remove an entire PDF from a collection and the new chroma_query_with_sources provides a bibliography of file names at the end of its response. This obviously needs polishing but it's a start.
-
+Chroma's original deletion function depends on knowing the document you want to remove. If you've turned a sixty page court filing into many paragraphs (documents) that's an impossible mess. When handling evidence or intel, it's not uncommon to decide to back out something you've received. There is now a script to remove an entire PDF from a collection. The new chroma_query_with_sources provides a bibliography of file names at the end of its response, facilitating removal.

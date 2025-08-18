@@ -66,7 +66,7 @@ def smart_paragraph_detection(text):
     
     return paragraphs
 
-def semantic_chunk_text(text, max_chunk_size=1000, min_chunk_size=100):
+def semantic_chunk_text(text, max_chunk_size=3000, min_chunk_size=100):
     """
     Split text into semantic chunks based on paragraphs, sentences, and sections.
     Uses improved paragraph detection for better results with novels/prose.
