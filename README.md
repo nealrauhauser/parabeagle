@@ -13,6 +13,7 @@ An LLM is basically a stochastic parrot, and they will "hallucinate", which is a
 
 Chroma's default chunking is to split documents into 1,000 character blocks. This software's command line loader looks for paragraphs in literature and it has some features meant to handle court documents. The default maximum chunk size is 3,000 characters. A very dense 8.5x11" page is just under 2,000 characters, so unless you're working on an Ayn Rand novel, your paragraphs will be kept whole for the sake of semantic search.
 
+
 This software assumes you're going to run local embedding rather than using a paid API. You have a choice of embeddings - minilm-384 (fast), mpnet-768(accurate), bert-768 (tries to balance). Each collection can have its own embedding, documents in a collection must be the same. 
 
 Note that this only apply to the CLI addpdf.py loader. The chroma_add_documents function in the server code is still just the 1k chunk 384 dimension default, so this has been DISABLED. If you were to use it to load a document over the top of a batch created collection, terrible things would happen.

@@ -21,6 +21,11 @@ from chromadb.api import EmbeddingFunction
 from chromadb.utils.embedding_functions import (
     DefaultEmbeddingFunction,
     SentenceTransformerEmbeddingFunction,
+    CohereEmbeddingFunction,
+    OpenAIEmbeddingFunction,
+    JinaEmbeddingFunction,
+    VoyageAIEmbeddingFunction,
+    RoboflowEmbeddingFunction,
 )
 
 # Initialize FastMCP server
@@ -357,7 +362,26 @@ def create_local_embedding_functions():
         ),
     }
 
-mcp_known_embedding_functions = create_local_embedding_functions()
+# Combined embedding functions: local models + cloud APIs
+mcp_known_embedding_functions: Dict[str, EmbeddingFunction] = {
+    # Local embedding functions (recommended for privacy and cost)
+    "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
+    "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
+        model_name="sentence-transformers/all-mpnet-base-v2"
+    ),
+    "bert-768": lambda: SentenceTransformerEmbeddingFunction(
+        model_name="sentence-transformers/all-distilroberta-v1"
+    ),
+    "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    ),
+    # Cloud-based embedding functions (require API keys)
+    "cohere": CohereEmbeddingFunction,
+    "openai": OpenAIEmbeddingFunction,
+    "jina": JinaEmbeddingFunction,
+    "voyageai": VoyageAIEmbeddingFunction,
+    "roboflow": RoboflowEmbeddingFunction,
+}
 @mcp.tool()
 async def chroma_create_collection(
     collection_name: str,
@@ -368,7 +392,9 @@ async def chroma_create_collection(
     
     Args:
         collection_name: Name of the collection to create
-        embedding_function_name: Name of the embedding function to use. Options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
+        embedding_function_name: Name of the embedding function to use. 
+                                 Local options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
+                                 Cloud options: 'cohere', 'openai', 'jina', 'voyageai', 'roboflow' (require API keys)
         metadata: Optional metadata dict to add to the collection
     """
     client = get_chroma_client()
