@@ -1,0 +1,13 @@
+    "parabeagle": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "/Users/yourname/work/gits/parabeagle",
+        "parabeagle",
+        "--client-type",
+        "persistent",
+        "--data-dir",
+        "/Users/yourname/chromafiles/"
+      ]
+    },

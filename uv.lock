@@ -325,52 +325,6 @@ wheels = [
 ]
 
 [[package]]
-name = "chroma-mcp"
-version = "0.2.6"
-source = { editable = "." }
-dependencies = [
-    { name = "chromadb" },
-    { name = "cohere" },
-    { name = "httpx" },
-    { name = "mcp", extra = ["cli"] },
-    { name = "openai" },
-    { name = "pillow" },
-    { name = "python-dotenv" },
-    { name = "sentence-transformers" },
-    { name = "typing-extensions" },
-    { name = "voyageai" },
-]
-
-[package.optional-dependencies]
-sentence-transformers = [
-    { name = "sentence-transformers" },
-]
-test = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "chromadb", specifier = ">=1.0.16" },
-    { name = "cohere", specifier = ">=5.14.2" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "mcp", extras = ["cli"], specifier = "==1.6.0" },
-    { name = "openai", specifier = ">=1.70.0" },
-    { name = "pillow", specifier = ">=11.1.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.5" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.26.0" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.1.0" },
-    { name = "python-dotenv", specifier = ">=0.19.0" },
-    { name = "sentence-transformers", specifier = ">=4.1.0" },
-    { name = "sentence-transformers", marker = "extra == 'sentence-transformers'", specifier = ">=4.1.0" },
-    { name = "typing-extensions", specifier = ">=4.13.1" },
-    { name = "voyageai", specifier = ">=0.3.2" },
-]
-provides-extras = ["sentence-transformers", "test"]
-
-[[package]]
 name = "chromadb"
 version = "1.0.20"
 source = { registry = "https://pypi.org/simple" }
@@ -1800,6 +1754,52 @@ sdist = { url = "https://files.pythonhosted.org/packages/d0/63/68dbb6eb2de9cb10e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/ef/eb23f262cca3c0c4eb7ab1933c3b1f03d021f2c48f54763065b6f0e321be/packaging-24.2-py3-none-any.whl", hash = "sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759", size = 65451, upload-time = "2024-11-08T09:47:44.722Z" },
 ]
+
+[[package]]
+name = "parabeagle"
+version = "0.2.6"
+source = { editable = "." }
+dependencies = [
+    { name = "chromadb" },
+    { name = "cohere" },
+    { name = "httpx" },
+    { name = "mcp", extra = ["cli"] },
+    { name = "openai" },
+    { name = "pillow" },
+    { name = "python-dotenv" },
+    { name = "sentence-transformers" },
+    { name = "typing-extensions" },
+    { name = "voyageai" },
+]
+
+[package.optional-dependencies]
+sentence-transformers = [
+    { name = "sentence-transformers" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "chromadb", specifier = ">=1.0.16" },
+    { name = "cohere", specifier = ">=5.14.2" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "mcp", extras = ["cli"], specifier = "==1.6.0" },
+    { name = "openai", specifier = ">=1.70.0" },
+    { name = "pillow", specifier = ">=11.1.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.26.0" },
+    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.1.0" },
+    { name = "python-dotenv", specifier = ">=0.19.0" },
+    { name = "sentence-transformers", specifier = ">=4.1.0" },
+    { name = "sentence-transformers", marker = "extra == 'sentence-transformers'", specifier = ">=4.1.0" },
+    { name = "typing-extensions", specifier = ">=4.13.1" },
+    { name = "voyageai", specifier = ">=0.3.2" },
+]
+provides-extras = ["sentence-transformers", "test"]
 
 [[package]]
 name = "pillow"

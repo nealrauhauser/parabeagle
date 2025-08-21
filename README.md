@@ -20,6 +20,23 @@ Note that this only apply to the CLI addpdf.py loader. The chroma_add_documents 
 
 The pdfstruct.py script evaluates a document in terms of paragraph size distribution. If you have enormous datasets there might be some advantage in tweaking the maximum chunk size.
 
+This is the configuration from a Mac running Parabeagle. The first folder should be set to the location where you cloned the repository. The second is the default Chroma database folder that is created the first time this server runs. If you use the multi-folder feature the system will create additional folders, each of which contains a fresh, empty Chroma database. The additional folder locations are stored in Chroma's Sqlite3 database, there is no need to have any --data-dir in this configuration beyond the default.
+```
+    "parabeagle": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "/Users/yourname/work/gits/parabeagle",
+        "parabeagle",
+        "--client-type",
+        "persistent",
+        "--data-dir",
+        "/Users/yourname/chroma/"
+      ]
+    },
+```
+
 To Do:
 
 Right now the only way to move data between systems is to archive an entire data directory and share it. There really needs to be a function that exports a collection from a directory, and a companion function that will merge such an export into a different directory. If a paralegal evaluates a huge collection of files and then adds a hundred of them to a collection, it may be necessary to export and transfer it to the system the attorney(s) on the case are using.
