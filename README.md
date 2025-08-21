@@ -1,4 +1,4 @@
-Parabeagle is a fork of [Chroma's Official MCP Server](https://github.com/chroma-core/chroma-mcp/) with modifications that are helpful for those of us who work on multiple court cases in parallel.
+Parabeagle is a fork of [Chroma's Official MCP Server](https://github.com/chroma-core/chroma-mcp/) with modifications that are helpful for those of us who work on multiple court cases in parallel. This software is for small offices, the sort of environment where a paralegal is supporting a small number of attorneys. There is no team access, the Chroma database folders the system creates get passed manually in a fashion similar to a word processor document.
 
 This software offers the following features:
 
@@ -41,4 +41,8 @@ To Do:
 
 Right now the only way to move data between systems is to archive an entire data directory and share it. There really needs to be a function that exports a collection from a directory, and a companion function that will merge such an export into a different directory. If a paralegal evaluates a huge collection of files and then adds a hundred of them to a collection, it may be necessary to export and transfer it to the system the attorney(s) on the case are using.
 
+There really should be a shared folders function, such that the creator/modifier of a database has full access, while the people who just need read access can see, but not change the databases. This should be tested with file sharing methods. I will do this with Dropbox, Google Drive, and Proton Drive. Open an issue if you need some other file sharing mechanism added and tested. Access control would be accomplished with an option in the Claude Desktop configuration file, something would denote if a given system were a writer, or just a reader.
+
 Chroma's original deletion function depends on knowing the document(paragraph) you want to remove. If you've turned a sixty page court filing into many documents that's an impossible mess. When handling evidence or intel, it's not uncommon to decide to back out something you've received. There is a script to remove an entire PDF from a collection. The new chroma_query_with_sources provides a bibliography of file names at the end of its response, facilitating removal.
+
+This will never be forensic software, but it does need more features in terms of the raw documents that are added to the databases. There should be a root folder with subdirectories for each case and the system should keep a SHA256 hash of each file in addition to the other metadata.
