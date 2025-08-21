@@ -18,4 +18,4 @@ RUN python -m pip install --upgrade pip && \
 EXPOSE 8080
 
 # Command to run MCP server
-CMD ["chroma-mcp"]
+CMD ["parabeagle"]

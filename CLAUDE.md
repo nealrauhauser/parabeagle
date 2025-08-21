@@ -23,7 +23,7 @@ This is a Chroma MCP (Model Context Protocol) Server that provides vector databa
 - Install package in development mode: `pip install -e .`
 - Install with optional dependencies: `pip install -e .[sentence-transformers]`
 - **For 768-dimension embeddings**: `pip install sentence-transformers` (required for mpnet-768, bert-768, minilm-384)
-- Run the server: `chroma-mcp` or `python -m chroma_mcp`
+- Run the server: `parabeagle` or `python -m chroma_mcp`
 
 ## Architecture
 

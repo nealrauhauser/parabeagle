@@ -1,5 +1,5 @@
 [project]
-name = "chroma-mcp"
+name = "parabeagle"
 version = "0.2.6"
 description = "Chroma MCP Server - Vector Database Integration for LLM Applications"
 readme = "README.md"
@@ -38,7 +38,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-chroma-mcp = "chroma_mcp:main"
+parabeagle = "chroma_mcp:main"
 
 [project.optional-dependencies]
 sentence-transformers = ["sentence-transformers>=4.1.0"]
