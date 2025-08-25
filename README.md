@@ -2,7 +2,7 @@ Parabeagle is a fork of [Chroma's Official MCP Server](https://github.com/chroma
 
 This software offers the following features:
 
-1. Semantic chunking based on paragraphs, with provisions for court documents.
+1. Semantic chunking based on paragraphs, with provisions for court documents. 
 2. Multiple mutually exclusive data directories, compartmentalizing court case work.
 3. 384 or 768 dimension embedding; be fast, or be very accurate.
 4. Command line document tools suitable for batch loading.
