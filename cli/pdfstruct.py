@@ -1,4 +1,4 @@
-#!/Users/brain/work/gits/chroma-mac/.venv/bin/python
+#!/Users/brain/work/gits/parabeagle/.venv/bin/python
 
 # Smart dependency detection and helpful error messages
 def check_dependencies():
