@@ -368,7 +368,7 @@ async def chroma_list_collections(limit: int | None = None, offset: int | None =
         offset: Optional number of collections to skip before returning results
 
     Returns:
-        Newline-separated list of collection names, or "No collections found" if database is empty
+        Directory path followed by newline-separated list of collection names, or "No collections found" if database is empty
     """
     client = get_chroma_client()
     try:
@@ -376,9 +376,16 @@ async def chroma_list_collections(limit: int | None = None, offset: int | None =
         # Safe handling: If colls is None or empty, return a special marker
         if not colls:
             return "No collections found"
-        # Return as a newline-separated list of collection names
+        
+        # Get the active directory to display above collection list
+        active_dir = get_active_directory()
+        
+        # Return collection names with directory shown once at top
         names = [coll.name for coll in colls]
-        return "\n".join(names)
+        if active_dir:
+            return f"{active_dir}\n" + "\n".join(names)
+        else:
+            return "\n".join(names)
 
     except Exception as e:
         raise Exception(f"Failed to list collections: {str(e)}") from e
