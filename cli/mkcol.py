@@ -3,6 +3,7 @@
 import chromadb
 import sys
 import os
+import sqlite3
 from chromadb.api.collection_configuration import CreateCollectionConfiguration
 from chromadb.utils.embedding_functions import (
     DefaultEmbeddingFunction,
@@ -27,7 +28,30 @@ def create_local_embedding_functions():
 
 mcp_known_embedding_functions = create_local_embedding_functions()
 
-def add_collection(data_dir, collection_name, embedding_function_name="default"):
+def get_active_directory(base_dir):
+    """Get the currently active directory from the directory database."""
+    if not base_dir:
+        return None
+        
+    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
+    if not os.path.exists(db_path):
+        return None
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+    except sqlite3.Error:
+        pass
+    
+    return None
+
+def add_collection(data_dir, collection_name, embedding_function_name="mpnet-768"):
     """Create a new collection in the specified Chroma data directory."""
     try:
         client = chromadb.PersistentClient(path=data_dir)
@@ -87,14 +111,21 @@ Examples:
                        help="Name of the collection to create")
     parser.add_argument("-e", "--embedding-function", 
                        choices=["default", "mpnet-768", "bert-768", "minilm-384"],
-                       default="default",
-                       help="Embedding function to use: default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
+                       default="mpnet-768",
+                       help="Embedding function to use (default: mpnet-768): default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
     
     args = parser.parse_args()
     
-    if not args.data_dir:
+    # Try to get active directory first, fall back to provided/env directory
+    data_dir = args.data_dir
+    if data_dir:
+        active_dir = get_active_directory(data_dir)
+        if active_dir:
+            data_dir = active_dir
+    
+    if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
         sys.exit(1)
     
-    exit_code = add_collection(args.data_dir, args.collection_name, args.embedding_function)
+    exit_code = add_collection(data_dir, args.collection_name, args.embedding_function)
     sys.exit(exit_code)

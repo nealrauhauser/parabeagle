@@ -11,6 +11,7 @@ import uuid
 import time
 import json
 import sqlite3
+import re
 from typing_extensions import TypedDict
 
 
@@ -33,6 +34,8 @@ mcp = FastMCP("chroma")
 _chroma_client = None
 _active_directory = None
 _directory_db_path = None
+_main_data_dir = None
+_client_args = None
 
 
 def create_parser():
@@ -138,17 +141,31 @@ def list_directories() -> List[Dict]:
     return directories
 
 
-def add_directory(name: str, path: str) -> bool:
-    """Add a new directory configuration."""
-    if not _directory_db_path:
+def validate_directory_name(name: str) -> bool:
+    """Validate directory name contains only alphanumeric chars, hyphens, and underscores."""
+    return bool(re.match(r'^[a-zA-Z0-9_-]+$', name))
+
+def add_directory(name: str) -> bool:
+    """Add a new directory configuration using name as both identifier and subdirectory under the main data directory."""
+    if not _directory_db_path or not _main_data_dir:
         return False
 
-    # Validate path exists
-    if not os.path.exists(path):
-        raise ValueError(f"Directory does not exist: {path}")
+    # Validate name format
+    if not validate_directory_name(name):
+        raise ValueError(f"Directory name '{name}' contains invalid characters. Only letters, numbers, hyphens, and underscores are allowed.")
 
-    if not os.path.isdir(path):
-        raise ValueError(f"Path is not a directory: {path}")
+    # Create full path as subdirectory under main data directory using the name
+    full_path = os.path.join(_main_data_dir, name)
+
+    # Create directory if it doesn't exist
+    if not os.path.exists(full_path):
+        try:
+            os.makedirs(full_path, exist_ok=True)
+        except OSError as e:
+            raise ValueError(f"Could not create directory {full_path}: {e}")
+
+    if not os.path.isdir(full_path):
+        raise ValueError(f"Path is not a directory: {full_path}")
 
     conn = sqlite3.connect(_directory_db_path)
     cursor = conn.cursor()
@@ -159,7 +176,7 @@ def add_directory(name: str, path: str) -> bool:
             INSERT INTO directories (name, path) 
             VALUES (?, ?)
         """,
-            (name, os.path.abspath(path)),
+            (name, os.path.abspath(full_path)),
         )
         conn.commit()
         return True
@@ -266,13 +283,25 @@ def get_active_directory() -> str:
 
 def get_chroma_client(args=None):
     """Get or create the global Chroma client instance."""
-    global _chroma_client
+    global _chroma_client, _active_directory, _client_args
+    
+    # For persistent clients, always check if active directory has changed
+    if _chroma_client is not None and _client_args and _client_args.client_type == "persistent":
+        current_active = get_active_directory()
+        if current_active != _active_directory:
+            # Active directory changed, reset client
+            _chroma_client = None
+            _active_directory = current_active
+    
     if _chroma_client is None:
         if args is None:
             # Create parser and parse args if not provided
             parser = create_parser()
             args = parser.parse_args()
 
+        # Store args for future reference
+        _client_args = args
+        
         # Load environment variables from .env file if it exists
         load_dotenv(dotenv_path=args.dotenv_path)
         if args.client_type == "http":
@@ -432,14 +461,14 @@ mcp_known_embedding_functions: Dict[str, EmbeddingFunction] = {
 @mcp.tool()
 async def chroma_create_collection(
     collection_name: str,
-    embedding_function_name: str = "default",
+    embedding_function_name: str = "mpnet-768",
     metadata: Dict | None = None,
 ) -> str:
     """Create a new Chroma collection with configurable embedding functions.
 
     Args:
         collection_name: Name of the collection to create
-        embedding_function_name: Name of the embedding function to use.
+        embedding_function_name: Name of the embedding function to use (default: mpnet-768).
                                  Local options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
                                  Cloud options: 'cohere', 'openai', 'jina', 'voyageai', 'roboflow' (require API keys)
         metadata: Optional metadata dict to add to the collection
@@ -607,19 +636,19 @@ async def chroma_list_directories() -> str:
 
 
 @mcp.tool()
-async def chroma_add_directory(name: str, path: str) -> str:
-    """Add a new Chroma directory configuration.
+async def chroma_add_directory(name: str) -> str:
+    """Add a new Chroma directory configuration using name as both identifier and subdirectory under the main data directory.
 
     Args:
-        name: Symbolic name for the directory
-        path: Filesystem path to the directory
+        name: Directory name (used as both identifier and subdirectory name, only letters, numbers, hyphens, and underscores allowed)
 
     Returns:
         Success message
     """
     try:
-        add_directory(name, path)
-        return f"Successfully added directory '{name}' -> {path}"
+        add_directory(name)
+        full_path = os.path.join(_main_data_dir, name) if _main_data_dir else name
+        return f"Successfully added directory '{name}' -> {full_path}"
 
     except Exception as e:
         raise Exception(f"Failed to add directory: {str(e)}") from e
@@ -1079,14 +1108,32 @@ def main():
 
     # Initialize directory management database if using persistent client
     if args.client_type == "persistent" and args.data_dir:
+        global _main_data_dir
+        _main_data_dir = args.data_dir
         _directory_db_path = get_directory_db_path(args.data_dir)
         init_directory_db(_directory_db_path)
 
         # If no directories configured, add the base directory as default
         directories = list_directories()
         if not directories:
-            add_directory("default", args.data_dir)
-            set_active_directory("default")
+            # Create a special "main" directory that points to the base directory itself
+            # We'll handle this case specially to avoid creating a subdirectory
+            conn = sqlite3.connect(_directory_db_path)
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO directories (name, path) 
+                    VALUES (?, ?)
+                """,
+                    ("main", os.path.abspath(_main_data_dir)),
+                )
+                conn.commit()
+                set_active_directory("main")
+            except sqlite3.IntegrityError:
+                pass  # Directory already exists
+            finally:
+                conn.close()
 
     # Validate required arguments based on client type
     if args.client_type == "http":

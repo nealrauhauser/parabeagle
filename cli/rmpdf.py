@@ -4,6 +4,30 @@ import chromadb
 import sys
 import os
 from pathlib import Path
+import sqlite3
+
+def get_active_directory(base_dir):
+    """Get the currently active directory from the directory database."""
+    if not base_dir:
+        return None
+        
+    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
+    if not os.path.exists(db_path):
+        return None
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+    except sqlite3.Error:
+        pass
+    
+    return None
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file using pypdf."""
@@ -111,7 +135,14 @@ Examples:
     
     args = parser.parse_args()
     
-    if not args.data_dir:
+    # Try to get active directory first, fall back to provided/env directory
+    data_dir = args.data_dir
+    if data_dir:
+        active_dir = get_active_directory(data_dir)
+        if active_dir:
+            data_dir = active_dir
+    
+    if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
         sys.exit(1)
     
@@ -124,7 +155,7 @@ Examples:
         sys.exit(1)
     
     exit_code = remove_pdf_from_collection(
-        args.data_dir, 
+        data_dir, 
         args.collection_name, 
         args.pdf_path,
         dry_run=args.dry_run

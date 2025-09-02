@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import os
 import argparse
+import re
 from pathlib import Path
 
 def get_directory_db_path(base_dir: str) -> str:
@@ -60,15 +61,34 @@ def list_directories(db_path: str):
     
     return 0
 
-def add_directory(db_path: str, name: str, path: str):
-    """Add a new directory configuration."""
-    # Validate path exists
-    if not os.path.exists(path):
-        print(f"Error: Directory does not exist: {path}")
+def validate_directory_name(name: str) -> bool:
+    """Validate directory name contains only alphanumeric chars, hyphens, and underscores."""
+    return bool(re.match(r'^[a-zA-Z0-9_-]+$', name))
+
+def add_directory(db_path: str, name: str, base_data_dir: str = None):
+    """Add a new directory configuration using the name as both identifier and folder name."""
+    # Validate name format
+    if not validate_directory_name(name):
+        print(f"Error: Directory name '{name}' contains invalid characters. Only letters, numbers, hyphens, and underscores are allowed.")
         return 1
     
-    if not os.path.isdir(path):
-        print(f"Error: Path is not a directory: {path}")
+    # Use name as the subdirectory path under base_data_dir
+    if base_data_dir:
+        full_path = os.path.join(base_data_dir, name)
+    else:
+        full_path = name
+    
+    # Create directory if it doesn't exist
+    if not os.path.exists(full_path):
+        try:
+            os.makedirs(full_path, exist_ok=True)
+            print(f"Created directory: {full_path}")
+        except OSError as e:
+            print(f"Error: Could not create directory {full_path}: {e}")
+            return 1
+    
+    if not os.path.isdir(full_path):
+        print(f"Error: Path is not a directory: {full_path}")
         return 1
     
     # Initialize DB if it doesn't exist
@@ -82,9 +102,9 @@ def add_directory(db_path: str, name: str, path: str):
         cursor.execute('''
             INSERT INTO directories (name, path) 
             VALUES (?, ?)
-        ''', (name, os.path.abspath(path)))
+        ''', (name, os.path.abspath(full_path)))
         conn.commit()
-        print(f"Successfully added directory '{name}' -> {os.path.abspath(path)}")
+        print(f"Successfully added directory '{name}' -> {os.path.abspath(full_path)}")
         return 0
     except sqlite3.IntegrityError:
         print(f"Error: Directory name '{name}' already exists")
@@ -197,14 +217,14 @@ Examples:
   # List all directories
   python manage_dirs.py --list
   
-  # Add a new directory
-  python manage_dirs.py --add mydata /path/to/data
+  # Add a new directory (creates subdirectory under main data directory)
+  python manage_dirs.py --add case-2024-001
   
   # Remove a directory
-  python manage_dirs.py --remove mydata
+  python manage_dirs.py --remove case-2024-001
   
   # Set active directory
-  python manage_dirs.py --set-active mydata
+  python manage_dirs.py --set-active case-2024-001
   
   # Show active directory
   python manage_dirs.py --show-active
@@ -221,8 +241,8 @@ Examples:
                              help="Initialize directory management database")
     action_group.add_argument("--list", action="store_true",
                              help="List all configured directories")
-    action_group.add_argument("--add", nargs=2, metavar=("NAME", "PATH"),
-                             help="Add a new directory with symbolic name and path")
+    action_group.add_argument("--add", nargs=1, metavar="NAME",
+                             help="Add a new directory using NAME as both identifier and subdirectory name (created under main data directory)")
     action_group.add_argument("--remove", metavar="NAME",
                              help="Remove a directory configuration by name")
     action_group.add_argument("--set-active", metavar="NAME",
@@ -245,8 +265,8 @@ Examples:
     elif args.list:
         sys.exit(list_directories(db_path))
     elif args.add:
-        name, path = args.add
-        sys.exit(add_directory(db_path, name, path))
+        name = args.add[0]
+        sys.exit(add_directory(db_path, name, args.data_dir))
     elif args.remove:
         sys.exit(remove_directory(db_path, args.remove))
     elif args.set_active:

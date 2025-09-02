@@ -59,11 +59,11 @@ The server exposes tools in two main categories:
 - `chroma_delete_documents` - Remove documents by ID
 
 #### Embedding Functions (`server.py:167-182`)
-Supports local embedding models only via ChromaDB's SentenceTransformer integration:
-- `default`: DefaultEmbeddingFunction (all-MiniLM-L6-v2, 384 dimensions)
-- `mpnet-768`: all-mpnet-base-v2 model (768 dimensions) - **Best quality for 768-dim**
+Supports local embedding models only via ChromaDB's SentenceTransformer integration (default: mpnet-768):
+- `mpnet-768`: all-mpnet-base-v2 model (768 dimensions) - **Best quality, default**
 - `bert-768`: all-distilroberta-v1 model (768 dimensions) - **Fast 768-dim alternative**
 - `minilm-384`: all-MiniLM-L6-v2 model (384 dimensions) - **Explicit 384-dim option**
+- `default`: DefaultEmbeddingFunction (all-MiniLM-L6-v2, 384 dimensions) - **Legacy option**
 
 All models run locally without API keys and automatically download on first use.
 

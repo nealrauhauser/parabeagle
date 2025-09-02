@@ -6,6 +6,7 @@ import os
 import uuid
 from pathlib import Path
 import re
+import sqlite3
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file using pypdf."""
@@ -65,6 +66,29 @@ def smart_paragraph_detection(text):
         paragraphs.append(' '.join(current_paragraph))
     
     return paragraphs
+
+def get_active_directory(base_dir):
+    """Get the currently active directory from the directory database."""
+    if not base_dir:
+        return None
+        
+    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
+    if not os.path.exists(db_path):
+        return None
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+    except sqlite3.Error:
+        pass
+    
+    return None
 
 def semantic_chunk_text(text, max_chunk_size=3000, min_chunk_size=100):
     """
@@ -144,7 +168,7 @@ def split_by_sentences(text):
     sentences = re.split(r'(?<=[.!?])\s+', text)
     return [s.strip() for s in sentences if s.strip()]
 
-def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, embedding_function_name="default", show_chunks=False):
+def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, embedding_function_name="mpnet-768", show_chunks=False):
     """Add PDF documents to a Chroma collection using semantic chunking."""
     try:
         client = chromadb.PersistentClient(path=data_dir)
@@ -296,14 +320,21 @@ Examples:
                        help="Number of chunks to process in each batch (default: 100)")
     parser.add_argument("--embedding-function", 
                        choices=["default", "mpnet-768", "bert-768", "minilm-384"],
-                       default="default",
-                       help="Embedding function to use: default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
+                       default="mpnet-768",
+                       help="Embedding function to use (default: mpnet-768): default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
     parser.add_argument("--show-chunks", action="store_true",
                        help="Print each chunk as it's processed with separator lines")
     
     args = parser.parse_args()
     
-    if not args.data_dir:
+    # Try to get active directory first, fall back to provided/env directory
+    data_dir = args.data_dir
+    if data_dir:
+        active_dir = get_active_directory(data_dir)
+        if active_dir:
+            data_dir = active_dir
+    
+    if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
         sys.exit(1)
     
@@ -318,8 +349,6 @@ Examples:
         print("Warning: Very large chunk size may cause performance issues and semantic dilution")
     
     print(f"Using embedding function: {args.embedding_function}")
-    
-    data_dir = args.data_dir
     collection_name = args.collection_name
     pdf_inputs = args.pdf_inputs
     
