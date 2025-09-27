@@ -4,9 +4,10 @@ This software offers the following features:
 
 1. Semantic chunking based on paragraphs, with provisions for court documents. 
 2. Multiple mutually exclusive data directories, compartmentalizing court case work.
-3. 384 or 768 dimension embedding; be fast, or be very accurate.
-4. Command line document tools suitable for batch loading.
-5. An MCP search function that returns a bibliography of documents and full file paths.
+3. Command line document tools suitable for batch loading.
+4. An MCP search function that returns a bibliography of documents and full file paths.
+5. 384 or 768 dimension embedding; be fast, or be very accurate.
+6. Cosine vector distance instead of L2, for MindsDB compatibility.
 
 An LLM is basically a stochastic parrot, and they will "hallucinate", which is a polite industry term to describe the fabrication of "facts" on the fly in order to make pleasing sentences and paragraphs. This sort of cognitive defect is simply unacceptable for intelligence or litigation work. This MCP server offers a function called chroma_query_with_sources, which permits the user to verify the LLM's statements by inspecting source documents. 
 
