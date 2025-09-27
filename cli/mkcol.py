@@ -74,13 +74,12 @@ def add_collection(data_dir, collection_name, embedding_function_name="mpnet-768
         # Get the embedding function class
         embedding_function = mcp_known_embedding_functions[embedding_function_name]
         
-        # Create collection with embedding function
-        configuration = CreateCollectionConfiguration(
-            embedding_function=embedding_function()
-        )
+        # Create collection with embedding function and cosine distance
+        configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
         collection = client.create_collection(
-            name=collection_name, 
-            configuration=configuration
+            name=collection_name,
+            configuration=configuration,
+            metadata={'hnsw:space': 'cosine'}
         )
         
         print(f"Successfully created collection '{collection_name}' with '{embedding_function_name}' embeddings")

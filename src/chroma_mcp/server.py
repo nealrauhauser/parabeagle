@@ -463,8 +463,9 @@ async def chroma_create_collection(
     collection_name: str,
     embedding_function_name: str = "mpnet-768",
     metadata: Dict | None = None,
+    space: str = "cosine",
 ) -> str:
-    """Create a new Chroma collection with configurable embedding functions.
+    """Create a new Chroma collection with configurable embedding functions and distance metric.
 
     Args:
         collection_name: Name of the collection to create
@@ -472,16 +473,25 @@ async def chroma_create_collection(
                                  Local options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
                                  Cloud options: 'cohere', 'openai', 'jina', 'voyageai', 'roboflow' (require API keys)
         metadata: Optional metadata dict to add to the collection
+        space: Distance function for vector similarity (default: cosine).
+               Options: 'cosine' (cosine similarity), 'l2' (Euclidean distance), 'ip' (inner product)
     """
     client = get_chroma_client()
 
     embedding_function = mcp_known_embedding_functions[embedding_function_name]
 
+    # Create configuration with embedding function
     configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
+
+    # Prepare metadata with HNSW space configuration
+    collection_metadata = metadata.copy() if metadata else {}
+    collection_metadata['hnsw:space'] = space
 
     try:
         client.create_collection(
-            name=collection_name, configuration=configuration, metadata=metadata
+            name=collection_name,
+            configuration=configuration,
+            metadata=collection_metadata
         )
         config_msg = f" with configuration: {configuration}"
         return f"Successfully created collection {collection_name}{config_msg}"

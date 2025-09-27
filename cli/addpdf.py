@@ -209,10 +209,12 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
                 return 1
             
             embedding_function = mcp_known_embedding_functions[embedding_function_name]
-            configuration = CreateCollectionConfiguration(
-                embedding_function=embedding_function()
+            configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
+            collection = client.create_collection(
+                name=collection_name,
+                configuration=configuration,
+                metadata={'hnsw:space': 'cosine'}
             )
-            collection = client.create_collection(name=collection_name, configuration=configuration)
             print(f"Created new collection '{collection_name}' with '{embedding_function_name}' embeddings.")
         
         documents = []
