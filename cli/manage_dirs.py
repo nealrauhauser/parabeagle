@@ -5,7 +5,9 @@ import sys
 import os
 import argparse
 import re
+import shutil
 from pathlib import Path
+import chromadb
 
 def get_directory_db_path(base_dir: str) -> str:
     """Get the path to the directory management database."""
@@ -71,13 +73,13 @@ def add_directory(db_path: str, name: str, base_data_dir: str = None):
     if not validate_directory_name(name):
         print(f"Error: Directory name '{name}' contains invalid characters. Only letters, numbers, hyphens, and underscores are allowed.")
         return 1
-    
+
     # Use name as the subdirectory path under base_data_dir
     if base_data_dir:
         full_path = os.path.join(base_data_dir, name)
     else:
         full_path = name
-    
+
     # Create directory if it doesn't exist
     if not os.path.exists(full_path):
         try:
@@ -86,21 +88,33 @@ def add_directory(db_path: str, name: str, base_data_dir: str = None):
         except OSError as e:
             print(f"Error: Could not create directory {full_path}: {e}")
             return 1
-    
+
     if not os.path.isdir(full_path):
         print(f"Error: Path is not a directory: {full_path}")
         return 1
-    
-    # Initialize DB if it doesn't exist
+
+    # Initialize ChromaDB in the new directory
+    print(f"Initializing ChromaDB in {full_path}...")
+    try:
+        # Create a PersistentClient to initialize the ChromaDB database
+        client = chromadb.PersistentClient(path=full_path)
+        # Verify initialization by checking the heartbeat
+        client.heartbeat()
+        print(f"ChromaDB initialized successfully")
+    except Exception as e:
+        print(f"Error: Could not initialize ChromaDB in {full_path}: {e}")
+        return 1
+
+    # Initialize directory management DB if it doesn't exist
     if not os.path.exists(db_path):
         init_directory_db(db_path)
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute('''
-            INSERT INTO directories (name, path) 
+            INSERT INTO directories (name, path)
             VALUES (?, ?)
         ''', (name, os.path.abspath(full_path)))
         conn.commit()
@@ -112,35 +126,57 @@ def add_directory(db_path: str, name: str, base_data_dir: str = None):
     finally:
         conn.close()
 
-def remove_directory(db_path: str, name: str):
-    """Remove a directory configuration."""
+def remove_directory(db_path: str, name: str, base_data_dir: str):
+    """Remove a directory configuration and delete the physical directory."""
     if not os.path.exists(db_path):
         print("No directory database found.")
         return 1
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
-    # Check if it's the active directory
-    cursor.execute('SELECT is_active FROM directories WHERE name = ?', (name,))
+
+    # Check if it's the active directory and get the path
+    cursor.execute('SELECT is_active, path FROM directories WHERE name = ?', (name,))
     result = cursor.fetchone()
-    
+
     if not result:
         print(f"Error: Directory '{name}' not found")
         conn.close()
         return 1
-    
-    if result[0]:  # is_active
-        print(f"Error: Cannot remove active directory '{name}'. Set another directory as active first.")
-        conn.close()
-        return 1
-    
+
+    is_active, directory_path = result
+
+    if is_active:
+        # If it's the active directory, switch to the main directory first
+        print(f"Directory '{name}' is active. Switching to main directory...")
+
+        # Clear all active flags (makes main directory active by default)
+        cursor.execute('UPDATE directories SET is_active = 0')
+        conn.commit()
+
+        print(f"Switched to main directory: {base_data_dir}")
+
+    # Delete from database
     cursor.execute('DELETE FROM directories WHERE name = ?', (name,))
     if cursor.rowcount > 0:
         conn.commit()
-        print(f"Successfully removed directory '{name}'")
         conn.close()
-        return 0
+
+        # Delete the physical directory
+        if os.path.exists(directory_path):
+            try:
+                shutil.rmtree(directory_path)
+                print(f"Successfully removed directory '{name}' -> {directory_path}")
+                print(f"  Physical directory deleted")
+                return 0
+            except Exception as e:
+                print(f"Successfully removed directory '{name}' from database")
+                print(f"  Warning: Could not delete physical directory {directory_path}: {e}")
+                return 0
+        else:
+            print(f"Successfully removed directory '{name}'")
+            print(f"  Physical directory was already deleted")
+            return 0
     else:
         print(f"Directory '{name}' not found")
         conn.close()
@@ -268,7 +304,7 @@ Examples:
         name = args.add[0]
         sys.exit(add_directory(db_path, name, args.data_dir))
     elif args.remove:
-        sys.exit(remove_directory(db_path, args.remove))
+        sys.exit(remove_directory(db_path, args.remove, args.data_dir))
     elif args.set_active:
         sys.exit(set_active_directory(db_path, args.set_active))
     elif args.show_active:

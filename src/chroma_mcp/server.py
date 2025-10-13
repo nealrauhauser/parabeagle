@@ -12,6 +12,7 @@ import time
 import json
 import sqlite3
 import re
+import shutil
 from typing_extensions import TypedDict
 
 
@@ -20,11 +21,6 @@ from chromadb.api import EmbeddingFunction
 from chromadb.utils.embedding_functions import (
     DefaultEmbeddingFunction,
     SentenceTransformerEmbeddingFunction,
-    CohereEmbeddingFunction,
-    OpenAIEmbeddingFunction,
-    JinaEmbeddingFunction,
-    VoyageAIEmbeddingFunction,
-    RoboflowEmbeddingFunction,
 )
 
 # Initialize FastMCP server
@@ -427,34 +423,21 @@ def create_local_embedding_functions():
         "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
             model_name="sentence-transformers/all-mpnet-base-v2"
         ),
-        "bert-768": lambda: SentenceTransformerEmbeddingFunction(
-            model_name="sentence-transformers/all-distilroberta-v1"
-        ),
         "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         ),
     }
 
 
-# Combined embedding functions: local models + cloud APIs
+# Local embedding functions for privacy and cost
 mcp_known_embedding_functions: Dict[str, EmbeddingFunction] = {
-    # Local embedding functions (recommended for privacy and cost)
     "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
     "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
         model_name="sentence-transformers/all-mpnet-base-v2"
     ),
-    "bert-768": lambda: SentenceTransformerEmbeddingFunction(
-        model_name="sentence-transformers/all-distilroberta-v1"
-    ),
     "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     ),
-    # Cloud-based embedding functions (require API keys)
-    "cohere": CohereEmbeddingFunction,
-    "openai": OpenAIEmbeddingFunction,
-    "jina": JinaEmbeddingFunction,
-    "voyageai": VoyageAIEmbeddingFunction,
-    "roboflow": RoboflowEmbeddingFunction,
 }
 
 
@@ -470,8 +453,7 @@ async def chroma_create_collection(
     Args:
         collection_name: Name of the collection to create
         embedding_function_name: Name of the embedding function to use (default: mpnet-768).
-                                 Local options: 'default' (384-dim), 'mpnet-768' (768-dim), 'bert-768' (768-dim), 'minilm-384' (384-dim)
-                                 Cloud options: 'cohere', 'openai', 'jina', 'voyageai', 'roboflow' (require API keys)
+                                 Available options: 'default' (384-dim), 'mpnet-768' (768-dim), 'minilm-384' (384-dim)
         metadata: Optional metadata dict to add to the collection
         space: Distance function for vector similarity (default: cosine).
                Options: 'cosine' (cosine similarity), 'l2' (Euclidean distance), 'ip' (inner product)
@@ -605,14 +587,66 @@ async def chroma_fork_collection(
 
 @mcp.tool()
 async def chroma_delete_collection(collection_name: str) -> str:
-    """Delete a Chroma collection.
+    """Delete a Chroma collection and its associated persistent files.
 
     Args:
         collection_name: Name of the collection to delete
     """
     client = get_chroma_client()
     try:
+        # Get the collection first to retrieve its UUID and segment IDs before deletion
+        collection = client.get_collection(collection_name)
+        collection_id = str(collection.id)
+
+        # Get segment IDs from the ChromaDB database before deleting the collection
+        segment_ids = []
+        if _client_args and _client_args.client_type == "persistent":
+            active_dir = get_active_directory()
+            data_dir = active_dir if active_dir else _client_args.data_dir
+
+            if data_dir:
+                db_path = os.path.join(data_dir, "chroma.sqlite3")
+                if os.path.exists(db_path):
+                    try:
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT id FROM segments WHERE collection = ?
+                        """, (collection_id,))
+                        segment_ids = [row[0] for row in cursor.fetchall()]
+                        conn.close()
+                    except Exception as db_error:
+                        # Log but don't fail if we can't read segments
+                        pass
+
+        # Delete the collection from ChromaDB
         client.delete_collection(collection_name)
+
+        # Clean up persistent files if using persistent client
+        if _client_args and _client_args.client_type == "persistent" and segment_ids:
+            active_dir = get_active_directory()
+            data_dir = active_dir if active_dir else _client_args.data_dir
+
+            if data_dir:
+                cleaned_dirs = []
+                failed_dirs = []
+
+                for segment_id in segment_ids:
+                    segment_dir = os.path.join(data_dir, segment_id)
+                    if os.path.exists(segment_dir):
+                        try:
+                            shutil.rmtree(segment_dir)
+                            cleaned_dirs.append(segment_id)
+                        except Exception as cleanup_error:
+                            failed_dirs.append((segment_id, str(cleanup_error)))
+
+                if cleaned_dirs and not failed_dirs:
+                    return f"Successfully deleted collection {collection_name} and cleaned up {len(cleaned_dirs)} segment directories"
+                elif cleaned_dirs and failed_dirs:
+                    return f"Successfully deleted collection {collection_name}, cleaned up {len(cleaned_dirs)} segment directories, but failed to clean up {len(failed_dirs)} directories"
+                elif failed_dirs:
+                    return f"Successfully deleted collection {collection_name}, but failed to clean up segment directories: {failed_dirs}"
+
         return f"Successfully deleted collection {collection_name}"
     except Exception as e:
         raise Exception(f"Failed to delete collection '{collection_name}': {str(e)}") from e

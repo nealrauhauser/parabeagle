@@ -10,23 +10,46 @@ def get_active_directory(base_dir):
     """Get the currently active directory from the directory database."""
     if not base_dir:
         return None
-        
+
     db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
     if not os.path.exists(db_path):
         return None
-    
+
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT path FROM directories WHERE is_active = 1')
         result = cursor.fetchone()
         conn.close()
-        
+
         if result:
             return result[0]
     except sqlite3.Error:
         pass
-    
+
+    return None
+
+def get_directory_by_name(base_dir, name):
+    """Get a directory path by its name."""
+    if not base_dir:
+        return None
+
+    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
+    if not os.path.exists(db_path):
+        return None
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path FROM directories WHERE name = ?', (name,))
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return result[0]
+    except sqlite3.Error:
+        pass
+
     return None
 
 def delete_collection(data_dir, collection_name, confirm=False):
@@ -93,13 +116,16 @@ if __name__ == "__main__":
 Examples:
   # List all collections first
   python delete_collection.py --list
-  
-  # Delete a collection (with confirmation prompt)
+
+  # Delete a collection from active directory (with confirmation prompt)
   python delete_collection.py -c MyCollection
-  
+
+  # Delete a collection from a specific directory by name
+  python delete_collection.py -n case-2024-001 -c MyCollection
+
   # Force delete without confirmation (dangerous!)
   python delete_collection.py -c MyCollection --force
-  
+
   # With specific data directory
   python delete_collection.py -d /Users/brain/work/chroma/ -c MyCollection
         """
@@ -110,19 +136,31 @@ Examples:
                        help="Directory for Chroma database storage (default: CHROMADIR environment variable)")
     parser.add_argument("-c", "--collection-name", 
                        help="Name of the collection to delete")
-    parser.add_argument("--list", "-l", action="store_true", 
+    parser.add_argument("--list", "-l", action="store_true",
                        help="List all collections and exit")
     parser.add_argument("--force", "-f", action="store_true",
                        help="Delete without confirmation prompt (dangerous!)")
-    
+    parser.add_argument("-n", "--directory-name",
+                       help="Name of a specific directory to use (overrides active directory)")
+
     args = parser.parse_args()
-    
-    # Try to get active directory first, fall back to provided/env directory
+
+    # Determine which directory to use
     data_dir = args.data_dir
     if data_dir:
-        active_dir = get_active_directory(data_dir)
-        if active_dir:
-            data_dir = active_dir
+        # If --directory-name is specified, use that directory by name
+        if args.directory_name:
+            named_dir = get_directory_by_name(data_dir, args.directory_name)
+            if named_dir:
+                data_dir = named_dir
+            else:
+                print(f"Error: Directory '{args.directory_name}' not found")
+                sys.exit(1)
+        else:
+            # Otherwise, use active directory if available
+            active_dir = get_active_directory(data_dir)
+            if active_dir:
+                data_dir = active_dir
     
     if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")

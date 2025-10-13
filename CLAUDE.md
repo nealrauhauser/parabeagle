@@ -92,3 +92,4 @@ The test suite (`tests/test_server.py`) uses pytest with async support and cover
 - Environment variable precedence and validation
 - Collection and document CRUD operations
 - Edge cases like duplicate IDs, empty collections, non-existent resources
+- need to consider bert-768 vs. minilm-384, in the context of dealing with standard Chroma installs.

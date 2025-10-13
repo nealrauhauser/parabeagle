@@ -18,9 +18,6 @@ def create_local_embedding_functions():
         "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
             model_name="sentence-transformers/all-mpnet-base-v2"
         ),
-        "bert-768": lambda: SentenceTransformerEmbeddingFunction(
-            model_name="sentence-transformers/all-distilroberta-v1"
-        ),
         "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         ),
@@ -32,23 +29,46 @@ def get_active_directory(base_dir):
     """Get the currently active directory from the directory database."""
     if not base_dir:
         return None
-        
+
     db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
     if not os.path.exists(db_path):
         return None
-    
+
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT path FROM directories WHERE is_active = 1')
         result = cursor.fetchone()
         conn.close()
-        
+
         if result:
             return result[0]
     except sqlite3.Error:
         pass
-    
+
+    return None
+
+def get_directory_by_name(base_dir, name):
+    """Get a directory path by its name."""
+    if not base_dir:
+        return None
+
+    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
+    if not os.path.exists(db_path):
+        return None
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path FROM directories WHERE name = ?', (name,))
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return result[0]
+    except sqlite3.Error:
+        pass
+
     return None
 
 def add_collection(data_dir, collection_name, embedding_function_name="mpnet-768"):
@@ -97,9 +117,17 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Create collection in active directory
   python add_collection.py --collection-name MyDocs
-  python add_collection.py -d /Users/brain/work/chroma/ --collection-name MyDocs
+
+  # Create collection in a specific directory by name
+  python add_collection.py -n case-2024-001 --collection-name MyDocs
+
+  # With custom embedding function
   python add_collection.py --collection-name MyDocs --embedding-function mpnet-768
+
+  # With custom data directory
+  python add_collection.py -d /Users/brain/work/chroma/ --collection-name MyDocs
         """
     )
     
@@ -108,19 +136,31 @@ Examples:
                        help="Directory for Chroma database storage (default: CHROMADIR environment variable)")
     parser.add_argument("-c", "--collection-name", required=True,
                        help="Name of the collection to create")
-    parser.add_argument("-e", "--embedding-function", 
-                       choices=["default", "mpnet-768", "bert-768", "minilm-384"],
+    parser.add_argument("-e", "--embedding-function",
+                       choices=["default", "mpnet-768", "minilm-384"],
                        default="mpnet-768",
-                       help="Embedding function to use (default: mpnet-768): default (384-dim), mpnet-768 (768-dim best quality), bert-768 (768-dim fast), minilm-384 (384-dim explicit)")
-    
+                       help="Embedding function to use (default: mpnet-768): default (384-dim), mpnet-768 (768-dim best quality), minilm-384 (384-dim explicit)")
+    parser.add_argument("-n", "--directory-name",
+                       help="Name of a specific directory to use (overrides active directory)")
+
     args = parser.parse_args()
-    
-    # Try to get active directory first, fall back to provided/env directory
+
+    # Determine which directory to use
     data_dir = args.data_dir
     if data_dir:
-        active_dir = get_active_directory(data_dir)
-        if active_dir:
-            data_dir = active_dir
+        # If --directory-name is specified, use that directory by name
+        if args.directory_name:
+            named_dir = get_directory_by_name(data_dir, args.directory_name)
+            if named_dir:
+                data_dir = named_dir
+            else:
+                print(f"Error: Directory '{args.directory_name}' not found")
+                sys.exit(1)
+        else:
+            # Otherwise, use active directory if available
+            active_dir = get_active_directory(data_dir)
+            if active_dir:
+                data_dir = active_dir
     
     if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
