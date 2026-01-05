@@ -6,44 +6,17 @@ import os
 import uuid
 from pathlib import Path
 import re
-import sqlite3
-import hashlib
-from datetime import datetime
 
-# Global log file handle
-_log_file = None
+from common import (
+    get_active_directory,
+    calculate_sha256,
+    extract_text_from_pdf,
+    Logger,
+)
 
-def log_and_print(message):
-    """Print to console and write to log file."""
-    print(message)
-    if _log_file:
-        _log_file.write(f"{message}\n")
-        _log_file.flush()
+# Global logger
+_logger = None
 
-def calculate_sha256(file_path):
-    """Calculate SHA256 hash of a file."""
-    sha256_hash = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file using pypdf."""
-    try:
-        import pypdf
-        with open(pdf_path, 'rb') as file:
-            reader = pypdf.PdfReader(file)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-        return text.strip()
-    except ImportError:
-        print("pypdf not installed. Install with: pip install pypdf")
-        return None
-    except Exception:
-        # Return None to signal error, let caller handle printing
-        return None
 
 def smart_paragraph_detection(text):
     """Smart paragraph detection using multiple heuristics."""
@@ -86,29 +59,6 @@ def smart_paragraph_detection(text):
         paragraphs.append(' '.join(current_paragraph))
     
     return paragraphs
-
-def get_active_directory(base_dir):
-    """Get the currently active directory from the directory database."""
-    if not base_dir:
-        return None
-        
-    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
-    if not os.path.exists(db_path):
-        return None
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return result[0]
-    except sqlite3.Error:
-        pass
-    
-    return None
 
 def semantic_chunk_text(text, max_chunk_size=3000, min_chunk_size=100):
     """
@@ -188,9 +138,18 @@ def split_by_sentences(text):
     sentences = re.split(r'(?<=[.!?])\s+', text)
     return [s.strip() for s in sentences if s.strip()]
 
-def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, embedding_function_name="mpnet-768", show_chunks=False, verbose=False):
+def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=3000, min_chunk_size=100, show_chunks=False, verbose=False, logger=None):
     """Add PDF documents to a Chroma collection using semantic chunking."""
+    from common import get_embedding_function
+    from chromadb.api.collection_configuration import CreateCollectionConfiguration
     import time
+
+    def log(msg):
+        if logger:
+            logger.log(msg)
+        else:
+            print(msg)
+
     start_time = time.time()
 
     try:
@@ -200,44 +159,18 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
         try:
             collection = client.get_collection(collection_name)
             if verbose:
-                log_and_print(f"Using existing collection '{collection_name}'")
+                log(f"Using existing collection '{collection_name}'")
         except Exception:
-            # Import embedding functions (same as MCP server)
-            from chromadb.utils.embedding_functions import (
-                DefaultEmbeddingFunction,
-                SentenceTransformerEmbeddingFunction,
-            )
-            from chromadb.api.collection_configuration import CreateCollectionConfiguration
-            
-            # Same local embedding functions as MCP server
-            def create_local_embedding_functions():
-                """Create embedding functions for local models only."""
-                return {
-                    "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
-                    "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
-                        model_name="sentence-transformers/all-mpnet-base-v2"
-                    ),
-                    "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
-                        model_name="sentence-transformers/all-MiniLM-L6-v2"
-                    ),
-                }
-
-            mcp_known_embedding_functions = create_local_embedding_functions()
-            
-            if embedding_function_name not in mcp_known_embedding_functions:
-                log_and_print(f"Error: Unknown embedding function '{embedding_function_name}'")
-                log_and_print(f"Available options: {', '.join(mcp_known_embedding_functions.keys())}")
-                return 1
-
-            embedding_function = mcp_known_embedding_functions[embedding_function_name]
-            configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
+            # Use mpnet-768 embedding function from common
+            embedding_function = get_embedding_function()
+            configuration = CreateCollectionConfiguration(embedding_function=embedding_function)
             collection = client.create_collection(
                 name=collection_name,
                 configuration=configuration,
                 metadata={'hnsw:space': 'cosine'}
             )
             if verbose:
-                log_and_print(f"Created new collection '{collection_name}'")
+                log(f"Created new collection '{collection_name}'")
         
         documents = []
         metadatas = []
@@ -256,11 +189,11 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
             pdf_path = os.path.abspath(pdf_path)
 
             if not os.path.exists(pdf_path):
-                log_and_print(f"Warning: File {pdf_path} does not exist, skipping.")
+                log(f"Warning: File {pdf_path} does not exist, skipping.")
                 continue
 
             if not pdf_path.lower().endswith('.pdf'):
-                log_and_print(f"Warning: File {pdf_path} is not a PDF, skipping.")
+                log(f"Warning: File {pdf_path} is not a PDF, skipping.")
                 continue
 
             # Calculate SHA256 hash of the PDF file
@@ -269,21 +202,21 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
             # Check if this hash already exists in the collection
             if pdf_hash in existing_hashes:
                 if verbose:
-                    log_and_print(f"dup: {pdf_path}")
+                    log(f"dup: {pdf_path}")
                 else:
-                    log_and_print(pdf_path)
+                    log(pdf_path)
                 continue
 
             text = extract_text_from_pdf(pdf_path)
 
             if not text:
-                log_and_print(f"error: {pdf_path}")
+                log(f"error: {pdf_path}")
                 continue
 
-            log_and_print(pdf_path)
+            log(pdf_path)
 
             if verbose:
-                log_and_print(f"  SHA256: {pdf_hash}")
+                log(f"  SHA256: {pdf_hash}")
 
             # Use semantic chunking
             chunks = semantic_chunk_text(text, max_chunk_size, min_chunk_size)
@@ -310,7 +243,7 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
                 ids.append(f"{pdf_name}_semantic_chunk_{i}_{str(uuid.uuid4())[:8]}")
 
             if verbose:
-                log_and_print(f"  Split into {len(chunks)} semantic chunks (avg: {sum(len(c) for c in chunks) // len(chunks)} chars)")
+                log(f"  Split into {len(chunks)} semantic chunks (avg: {sum(len(c) for c in chunks) // len(chunks)} chars)")
 
         if not documents:
             return 0
@@ -318,12 +251,12 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
         # Add documents to collection in batches to avoid memory issues
         batch_size = 100
         total_added = 0
-        
+
         for i in range(0, len(documents), batch_size):
             batch_docs = documents[i:i+batch_size]
             batch_metas = metadatas[i:i+batch_size]
             batch_ids = ids[i:i+batch_size]
-            
+
             collection.add(
                 documents=batch_docs,
                 metadatas=batch_metas,
@@ -331,117 +264,107 @@ def add_pdfs_to_collection(data_dir, collection_name, pdf_paths, max_chunk_size=
             )
             total_added += len(batch_docs)
             if verbose:
-                log_and_print(f"  Added batch {i//batch_size + 1}: {total_added}/{len(documents)} chunks")
+                log(f"  Added batch {i//batch_size + 1}: {total_added}/{len(documents)} chunks")
 
         elapsed_time = time.time() - start_time
         if verbose:
-            log_and_print(f"Successfully added {len(documents)} chunks from {len(pdf_paths)} file(s) to collection '{collection_name}'")
-            log_and_print(f"Execution time: {elapsed_time:.2f} seconds")
+            log(f"Successfully added {len(documents)} chunks from {len(pdf_paths)} file(s) to collection '{collection_name}'")
+            log(f"Execution time: {elapsed_time:.2f} seconds")
         return 0
 
     except Exception as e:
-        log_and_print(f"Error adding PDFs to collection: {e}")
+        log(f"Error adding PDFs to collection: {e}")
         return 1
 
 if __name__ == "__main__":
     import argparse
 
-    # Open log file in append mode
-    log_path = os.path.join(os.getcwd(), "parabeagle.log")
-    _log_file = open(log_path, "a", encoding="utf-8")
-
-    try:
-        parser = argparse.ArgumentParser(
-            description="Add PDFs to a Chroma collection using semantic chunking",
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog="""
+    parser = argparse.ArgumentParser(
+        description="Add PDFs to a Chroma collection using semantic chunking",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
 Examples:
   python add_pdfs_semantic.py --collection-name MyDocs document.pdf
   python add_pdfs_semantic.py -d /Users/brain/work/chroma/ -c MyDocs document.pdf
   python add_pdfs_semantic.py -c MyDocs doc1.pdf doc2.pdf doc3.pdf
   python add_pdfs_semantic.py -c MyDocs /path/to/pdf/directory/
   python add_pdfs_semantic.py -c MyDocs document.pdf --max-chunk-size 2000
-  python add_pdfs_semantic.py -c MyDocs document.pdf --embedding-function mpnet-768
         """
-        )
+    )
 
-        parser.add_argument("-d", "--data-dir", "--data-directory",
-                           default=os.getenv('CHROMADIR'),
-                           help="Directory for Chroma database storage (default: CHROMADIR environment variable)")
-        parser.add_argument("-c", "--collection-name", required=True,
-                           help="Name of the collection to add documents to")
-        parser.add_argument("pdf_inputs", nargs="+", help="PDF files or directories containing PDFs")
-        parser.add_argument("--max-chunk-size", "--chunk-size", type=int, default=3000,
-                           help="Maximum size of each chunk in characters (default: 3000)")
-        parser.add_argument("--min-chunk-size", "--min-size", type=int, default=100,
-                           help="Minimum size of each chunk in characters (default: 100)")
-        parser.add_argument("--batch-size", type=int, default=100,
-                           help="Number of chunks to process in each batch (default: 100)")
-        parser.add_argument("--embedding-function",
-                           choices=["default", "mpnet-768", "minilm-384"],
-                           default="mpnet-768",
-                           help="Embedding function to use (default: mpnet-768): default (384-dim), mpnet-768 (768-dim best quality), minilm-384 (384-dim explicit)")
-        parser.add_argument("--show-chunks", action="store_true",
-                           help="Print each chunk as it's processed with separator lines")
-        parser.add_argument("--verbose", "-v", action="store_true",
-                           help="Show detailed progress including chunk counts, batch progress, and execution time")
+    parser.add_argument("-d", "--data-dir", "--data-directory",
+                       default=os.getenv('CHROMADIR'),
+                       help="Directory for Chroma database storage (default: CHROMADIR environment variable)")
+    parser.add_argument("-c", "--collection-name", required=True,
+                       help="Name of the collection to add documents to")
+    parser.add_argument("pdf_inputs", nargs="+", help="PDF files or directories containing PDFs")
+    parser.add_argument("--max-chunk-size", "--chunk-size", type=int, default=3000,
+                       help="Maximum size of each chunk in characters (default: 3000)")
+    parser.add_argument("--min-chunk-size", "--min-size", type=int, default=100,
+                       help="Minimum size of each chunk in characters (default: 100)")
+    parser.add_argument("--batch-size", type=int, default=100,
+                       help="Number of chunks to process in each batch (default: 100)")
 
-        args = parser.parse_args()
+    parser.add_argument("--show-chunks", action="store_true",
+                       help="Print each chunk as it's processed with separator lines")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                       help="Show detailed progress including chunk counts, batch progress, and execution time")
 
-        # Try to get active directory first, fall back to provided/env directory
-        data_dir = args.data_dir
-        if data_dir:
-            active_dir = get_active_directory(data_dir)
-            if active_dir:
-                data_dir = active_dir
+    args = parser.parse_args()
 
-        if not data_dir:
-            print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
-            sys.exit(1)
+    # Try to get active directory first, fall back to provided/env directory
+    data_dir = args.data_dir
+    if data_dir:
+        active_dir = get_active_directory(data_dir)
+        if active_dir:
+            data_dir = active_dir
 
-        # Validate chunk sizes
-        if args.max_chunk_size < args.min_chunk_size:
-            print("Error: max-chunk-size must be greater than min-chunk-size")
-            sys.exit(1)
+    if not data_dir:
+        print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
+        sys.exit(1)
 
-        if args.max_chunk_size < 50:
-            print("Warning: Very small chunk size may result in poor semantic quality")
-        elif args.max_chunk_size > 8000:
-            print("Warning: Very large chunk size may cause performance issues and semantic dilution")
+    # Validate chunk sizes
+    if args.max_chunk_size < args.min_chunk_size:
+        print("Error: max-chunk-size must be greater than min-chunk-size")
+        sys.exit(1)
 
-        collection_name = args.collection_name
-        pdf_inputs = args.pdf_inputs
+    if args.max_chunk_size < 50:
+        print("Warning: Very small chunk size may result in poor semantic quality")
+    elif args.max_chunk_size > 8000:
+        print("Warning: Very large chunk size may cause performance issues and semantic dilution")
 
-        # Collect all PDF paths
-        pdf_paths = []
-        for input_path in pdf_inputs:
-            if os.path.isfile(input_path):
-                pdf_paths.append(input_path)
-            elif os.path.isdir(input_path):
-                # Find all PDF files in directory
-                for file in Path(input_path).glob("*.pdf"):
-                    pdf_paths.append(str(file))
-                for file in Path(input_path).glob("*.PDF"):
-                    pdf_paths.append(str(file))
-            else:
-                print(f"Warning: {input_path} is neither a file nor a directory, skipping.")
+    collection_name = args.collection_name
+    pdf_inputs = args.pdf_inputs
 
-        if not pdf_paths:
-            print("No PDF files found to process.")
-            sys.exit(1)
+    # Collect all PDF paths
+    pdf_paths = []
+    for input_path in pdf_inputs:
+        if os.path.isfile(input_path):
+            pdf_paths.append(input_path)
+        elif os.path.isdir(input_path):
+            # Find all PDF files in directory
+            for file in Path(input_path).glob("*.pdf"):
+                pdf_paths.append(str(file))
+            for file in Path(input_path).glob("*.PDF"):
+                pdf_paths.append(str(file))
+        else:
+            print(f"Warning: {input_path} is neither a file nor a directory, skipping.")
 
+    if not pdf_paths:
+        print("No PDF files found to process.")
+        sys.exit(1)
+
+    # Use context manager for logger
+    log_path = os.path.join(os.getcwd(), "parabeagle.log")
+    with Logger(log_path) as logger:
         exit_code = add_pdfs_to_collection(
             data_dir,
             collection_name,
             pdf_paths,
             max_chunk_size=args.max_chunk_size,
             min_chunk_size=args.min_chunk_size,
-            embedding_function_name=args.embedding_function,
             show_chunks=args.show_chunks,
-            verbose=args.verbose
+            verbose=args.verbose,
+            logger=logger
         )
-        sys.exit(exit_code)
-    finally:
-        # Close log file
-        if _log_file:
-            _log_file.close()
+    sys.exit(exit_code)

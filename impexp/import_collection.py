@@ -118,34 +118,18 @@ def import_collection(data_dir, archive_path, collection_name=None, pdf_dir=None
             except Exception:
                 pass
 
-            # Create collection with proper configuration
-            from chromadb.utils.embedding_functions import (
-                DefaultEmbeddingFunction,
-                SentenceTransformerEmbeddingFunction,
-            )
+            # Create collection with mpnet-768 embedding function
+            from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
             from chromadb.api.collection_configuration import CreateCollectionConfiguration
 
-            def create_local_embedding_functions():
-                """Create embedding functions for local models only."""
-                return {
-                    "default": DefaultEmbeddingFunction,
-                    "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
-                        model_name="sentence-transformers/all-mpnet-base-v2"
-                    ),
-                    "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
-                        model_name="sentence-transformers/all-MiniLM-L6-v2"
-                    ),
-                }
-
-            mcp_known_embedding_functions = create_local_embedding_functions()
             embedding_fn_name = manifest.get('embedding_function', 'mpnet-768')
+            if embedding_fn_name != 'mpnet-768':
+                print(f"Note: Archive was created with '{embedding_fn_name}', importing with 'mpnet-768'")
 
-            if embedding_fn_name not in mcp_known_embedding_functions:
-                print(f"Warning: Unknown embedding function '{embedding_fn_name}', using 'mpnet-768'")
-                embedding_fn_name = 'mpnet-768'
-
-            embedding_function = mcp_known_embedding_functions[embedding_fn_name]
-            configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
+            embedding_function = SentenceTransformerEmbeddingFunction(
+                model_name="sentence-transformers/all-mpnet-base-v2"
+            )
+            configuration = CreateCollectionConfiguration(embedding_function=embedding_function)
 
             # Prepare collection metadata
             coll_metadata = collection_metadata.get('metadata', {})

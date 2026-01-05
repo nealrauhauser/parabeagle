@@ -5,30 +5,9 @@ import sys
 import os
 from pathlib import Path
 from collections import defaultdict
-import sqlite3
 
-def get_active_directory(base_dir):
-    """Get the currently active directory from the directory database."""
-    if not base_dir:
-        return None
-        
-    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
-    if not os.path.exists(db_path):
-        return None
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return result[0]
-    except sqlite3.Error:
-        pass
-    
-    return None
+from common import get_active_directory
+
 
 def list_files_in_collection(data_dir, collection_name, names_only=False):
     """List all original files in a collection."""

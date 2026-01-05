@@ -193,7 +193,7 @@ CHROMADIR=/prod/chroma ./cli/import_collection.py TestData.zip --force
    - Document IDs
 
 4. **Collection Configuration**:
-   - Embedding function name (mpnet-768, etc.)
+   - Embedding function (mpnet-768)
    - Distance metric (cosine, l2, ip)
    - HNSW configuration
    - Custom metadata
@@ -210,7 +210,7 @@ On import, the following is reconstructed:
 ### Limitations
 
 - **Embedding Function Must Match**: The same embedding model must be available on the import system
-- **Python Dependencies**: `sentence-transformers` required for 768-dim models
+- **Python Dependencies**: `sentence-transformers` required for mpnet-768 embeddings
 - **File Paths**: PDF paths are updated during import to new locations
 - **No Incremental Updates**: Import replaces entire collection (with `--force`)
 
@@ -255,8 +255,8 @@ If original PDFs have been moved/deleted:
 - Import will work but metadata will reference old paths
 
 ### "Unknown embedding function"
-If the embedding function isn't available:
-- Import will fall back to `mpnet-768`
+If importing an archive created with a different embedding function:
+- Import will use `mpnet-768`
 - You may need to install `sentence-transformers`
 
 ### Archive Corruption
@@ -274,5 +274,5 @@ Future versions may add:
 - Compression options
 - Incremental exports
 - Differential imports
-- External embedding support
+
 - Multi-collection archives

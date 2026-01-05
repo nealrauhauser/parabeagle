@@ -21,14 +21,11 @@ Creates new Chroma collections with configurable embedding functions.
 
 **Usage:**
 ```bash
-./mkcol.py /path/to/chroma/data collection_name [embedding_function]
+./mkcol.py /path/to/chroma/data collection_name
 ```
 
-**Embedding Functions Available:**
-- `default` - all-MiniLM-L6-v2 (384 dimensions)
-- `mpnet-768` - all-mpnet-base-v2 (768 dimensions, best quality)
-- `bert-768` - all-distilroberta-v1 (768 dimensions, faster)
-- `minilm-384` - all-MiniLM-L6-v2 (384 dimensions, explicit)
+**Embedding:**
+- Uses mpnet-768 (all-mpnet-base-v2, 768 dimensions, best quality)
 
 ### `rmcol.py` - Remove Collection
 Deletes collections from the Chroma database with safety confirmations.
@@ -134,7 +131,7 @@ pip install sentence-transformers
 
 1. **Create a collection:**
    ```bash
-   ./mkcol.py /data/chroma my_collection mpnet-768
+   ./mkcol.py /data/chroma my_collection
    ```
 
 2. **Add PDFs to collection:**

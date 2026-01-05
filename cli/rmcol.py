@@ -4,53 +4,9 @@ import chromadb
 import sys
 import os
 from pathlib import Path
-import sqlite3
 
-def get_active_directory(base_dir):
-    """Get the currently active directory from the directory database."""
-    if not base_dir:
-        return None
+from common import resolve_data_directory
 
-    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
-    if not os.path.exists(db_path):
-        return None
-
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT path FROM directories WHERE is_active = 1')
-        result = cursor.fetchone()
-        conn.close()
-
-        if result:
-            return result[0]
-    except sqlite3.Error:
-        pass
-
-    return None
-
-def get_directory_by_name(base_dir, name):
-    """Get a directory path by its name."""
-    if not base_dir:
-        return None
-
-    db_path = os.path.join(base_dir, 'chroma_directories.sqlite3')
-    if not os.path.exists(db_path):
-        return None
-
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT path FROM directories WHERE name = ?', (name,))
-        result = cursor.fetchone()
-        conn.close()
-
-        if result:
-            return result[0]
-    except sqlite3.Error:
-        pass
-
-    return None
 
 def delete_collection(data_dir, collection_name, confirm=False):
     """Delete a collection from the Chroma database."""
@@ -145,23 +101,13 @@ Examples:
 
     args = parser.parse_args()
 
-    # Determine which directory to use
-    data_dir = args.data_dir
-    if data_dir:
-        # If --directory-name is specified, use that directory by name
-        if args.directory_name:
-            named_dir = get_directory_by_name(data_dir, args.directory_name)
-            if named_dir:
-                data_dir = named_dir
-            else:
-                print(f"Error: Directory '{args.directory_name}' not found")
-                sys.exit(1)
-        else:
-            # Otherwise, use active directory if available
-            active_dir = get_active_directory(data_dir)
-            if active_dir:
-                data_dir = active_dir
-    
+    # Resolve the data directory
+    data_dir = resolve_data_directory(args.data_dir, args.directory_name)
+
+    if args.directory_name and not data_dir:
+        print(f"Error: Directory '{args.directory_name}' not found")
+        sys.exit(1)
+
     if not data_dir:
         print("Error: Data directory must be provided via --data-dir flag or CHROMADIR environment variable")
         sys.exit(1)

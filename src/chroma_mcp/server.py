@@ -18,10 +18,7 @@ from typing_extensions import TypedDict
 
 from chromadb.api.collection_configuration import CreateCollectionConfiguration
 from chromadb.api import EmbeddingFunction
-from chromadb.utils.embedding_functions import (
-    DefaultEmbeddingFunction,
-    SentenceTransformerEmbeddingFunction,
-)
+from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
 # Initialize FastMCP server
 mcp = FastMCP("chroma")
@@ -416,54 +413,33 @@ async def chroma_list_collections(limit: int | None = None, offset: int | None =
         raise Exception(f"Failed to list collections: {str(e)}") from e
 
 
-def create_local_embedding_functions():
-    """Create embedding functions for local models only."""
-    return {
-        "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
-        "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
-            model_name="sentence-transformers/all-mpnet-base-v2"
-        ),
-        "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        ),
-    }
-
-
-# Local embedding functions for privacy and cost
-mcp_known_embedding_functions: Dict[str, EmbeddingFunction] = {
-    "default": DefaultEmbeddingFunction,  # all-MiniLM-L6-v2 (384 dims)
-    "mpnet-768": lambda: SentenceTransformerEmbeddingFunction(
+def get_embedding_function():
+    """Get the mpnet-768 embedding function (768 dimensions, best quality)."""
+    return SentenceTransformerEmbeddingFunction(
         model_name="sentence-transformers/all-mpnet-base-v2"
-    ),
-    "minilm-384": lambda: SentenceTransformerEmbeddingFunction(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    ),
-}
+    )
 
 
 @mcp.tool()
 async def chroma_create_collection(
     collection_name: str,
-    embedding_function_name: str = "mpnet-768",
     metadata: Dict | None = None,
     space: str = "cosine",
 ) -> str:
-    """Create a new Chroma collection with configurable embedding functions and distance metric.
+    """Create a new Chroma collection with mpnet-768 embeddings and configurable distance metric.
 
     Args:
         collection_name: Name of the collection to create
-        embedding_function_name: Name of the embedding function to use (default: mpnet-768).
-                                 Available options: 'default' (384-dim), 'mpnet-768' (768-dim), 'minilm-384' (384-dim)
         metadata: Optional metadata dict to add to the collection
         space: Distance function for vector similarity (default: cosine).
                Options: 'cosine' (cosine similarity), 'l2' (Euclidean distance), 'ip' (inner product)
     """
     client = get_chroma_client()
 
-    embedding_function = mcp_known_embedding_functions[embedding_function_name]
+    embedding_function = get_embedding_function()
 
-    # Create configuration with embedding function
-    configuration = CreateCollectionConfiguration(embedding_function=embedding_function())
+    # Create configuration with mpnet-768 embedding function
+    configuration = CreateCollectionConfiguration(embedding_function=embedding_function)
 
     # Prepare metadata with HNSW space configuration
     collection_metadata = metadata.copy() if metadata else {}
@@ -758,66 +734,7 @@ async def chroma_get_active_directory() -> str:
 
 
 ##### Document Tools #####
-@mcp.tool()
-async def chroma_add_documents(
-    collection_name: str, documents: List[str], ids: List[str], metadatas: List[Dict] | None = None
-) -> str:
-    """Add documents to a Chroma collection.
-
-    Args:
-        collection_name: Name of the collection to add documents to
-        documents: List of text documents to add
-        ids: List of IDs for the documents (required)
-        metadatas: Optional list of metadata dictionaries for each document
-    """
-    if not documents:
-        raise ValueError("The 'documents' list cannot be empty.")
-
-    if not ids:
-        raise ValueError("The 'ids' list is required and cannot be empty.")
-
-    # Check if there are empty strings in the ids list
-    if any(not id.strip() for id in ids):
-        raise ValueError("IDs cannot be empty strings.")
-
-    if len(ids) != len(documents):
-        raise ValueError(
-            f"Number of ids ({len(ids)}) must match number of documents ({len(documents)})."
-        )
-
-    client = get_chroma_client()
-    try:
-        collection = client.get_or_create_collection(collection_name)
-
-        # Check for duplicate IDs
-        existing_ids = collection.get(include=[])["ids"]
-        duplicate_ids = [id for id in ids if id in existing_ids]
-
-        if duplicate_ids:
-            raise ValueError(
-                f"The following IDs already exist in collection '{collection_name}': {duplicate_ids}. "
-                f"Use 'chroma_update_documents' to update existing documents."
-            )
-
-        result = collection.add(documents=documents, metadatas=metadatas, ids=ids)
-
-        # Check the return value
-        if result and isinstance(result, dict):
-            # If the return value is a dictionary, it may contain success information
-            if "success" in result and not result["success"]:
-                raise Exception(f"Failed to add documents: {result.get('error', 'Unknown error')}")
-
-            # If the return value contains the actual number added
-            if "count" in result:
-                return f"Successfully added {result['count']} documents to collection {collection_name}"
-
-        # Default return
-        return f"Successfully added {len(documents)} documents to collection {collection_name}, result is {result}"
-    except Exception as e:
-        raise Exception(
-            f"Failed to add documents to collection '{collection_name}': {str(e)}"
-        ) from e
-
+# NOTE: There is no chroma_add_documents tool. Use CLI addpdf.py for document loading.
 
 @mcp.tool()
 async def chroma_query_documents(

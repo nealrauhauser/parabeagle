@@ -6,7 +6,7 @@ This software offers the following features:
 2. Multiple mutually exclusive data directories, compartmentalizing court case work.
 3. Command line document tools suitable for batch loading.
 4. An MCP search function that returns a bibliography of documents and full file paths.
-5. Replace Chroma's default 384 dimension embedding with 768 dimensions.
+5. Uses 768 dimension mpnet embeddings for best quality semantic search.
 6. Cosine vector distance instead of L2, for MindsDB compatibility.
 7. System keeps SHA256 of files it encounters in order to avoid the time of reprocessing a file it already has.
 
@@ -18,7 +18,7 @@ The Chroma MCP server's default chunking is to split documents into 1,000 charac
 
 This software assumes you're going to run local embedding rather than using a paid API. The prior embedding options are gone, we're just using mpnet-768, the slowest, but it's the best quality. Processing time for a clutch of short Substack posts turned to PDF was five to seven seconds each on a Mac with an M1 Pro processor.
 
-Note that this only apply to the CLI addpdf.py loader. The chroma_add_documents function in the server code is still just the 1k chunk 384 dimension default, so this has been DISABLED. If you were to use it to load a document over the top of a batch created collection, terrible things would happen.
+Note that the only way to add PDFs to the system is using the CLI addpdf.py loader. The built in chroma_add_documents found in the original Chroma software is disabled - there's no provision to control where it adds documents, and in general this function gives the LLM creative license to make messes, while the command line tools are deterministic.
 
 The pdfstruct.py script evaluates a document in terms of paragraph size distribution. If you have enormous datasets there might be some advantage in tweaking the maximum chunk size. This is more for me in development than anything a user would employ.
 
