@@ -1,4 +1,5 @@
 ### 4. UI Contract Definition
+#https://natesnewsletter.substack.com/p/grab-the-4-prompts-i-use-to-make
 
 **Use this when:** You're defining or revising the rules for a specific component, pattern, or interaction. Use it for new components, when inconsistency emerges, or when you're preparing a surface for AI generation.
 

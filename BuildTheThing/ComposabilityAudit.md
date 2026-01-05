@@ -1,4 +1,5 @@
 ### 3. Composability Readiness Audit
+#https://natesnewsletter.substack.com/p/grab-the-4-prompts-i-use-to-make
 
 **Use this when:** You're assessing your team's readiness for a world where AI and non-engineers compose UI. Run quarterly, during reorgs, or when you're feeling the pain of inconsistency.
 

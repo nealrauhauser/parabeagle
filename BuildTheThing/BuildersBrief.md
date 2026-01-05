@@ -1,4 +1,5 @@
 ### 1. The Builder's Brief
+#https://natesnewsletter.substack.com/p/grab-the-4-prompts-i-use-to-make
 
 **Use this when:** You have an idea for something to build but haven't started yet. This prompt forces the clarity that separates useful prototypes from abandoned experiments.
 

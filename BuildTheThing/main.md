@@ -1,4 +1,5 @@
 # The “Build The Thing” Front-End Shift Prompt Kit
+#https://natesnewsletter.substack.com/p/grab-the-4-prompts-i-use-to-make
 
 ## Quick Reference: Which Prompt When
 

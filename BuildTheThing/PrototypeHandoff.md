@@ -1,4 +1,5 @@
 ### 2. Prototype-to-Production Handoff
+#https://natesnewsletter.substack.com/p/grab-the-4-prompts-i-use-to-make
 
 **Use this when:** You built something in Lovable/Webflow that's ready to become a real product. This creates the documentation engineers need to build it properly—not copy your code, but understand your intent.
 
